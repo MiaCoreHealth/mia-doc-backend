@@ -170,3 +170,22 @@ async def analyze_report(file: UploadFile = File(...), current_user: models.User
 def get_user_reports(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     reports = db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
     return reports
+    # YENİ: Belirli bir raporu silen endpoint
+@app.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_report(report_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # 1. Silinmek istenen raporu veritabanında bul
+    report_to_delete = db.query(models.Report).filter(models.Report.id == report_id).first()
+
+    # 2. Rapor yoksa veya raporun sahibi şu anki kullanıcı değilse, hata ver
+    if not report_to_delete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rapor bulunamadı.")
+
+    if report_to_delete.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu raporu silme yetkiniz yok.")
+
+    # 3. Raporu veritabanından sil
+    db.delete(report_to_delete)
+    db.commit()
+
+    # 4. Başarılı silme işleminde, standart olarak boş bir cevap döndürülür
+    return
