@@ -18,10 +18,10 @@ from PIL import Image
 import io
 
 # Projemizin diğer dosyaları
-from . import models
-from . import schemas
-from . import security
-from .database import engine, SessionLocal
+import models
+import schemas
+import security
+from database import engine, SessionLocal
 
 # --- Kurulum ve Yapılandırma ---
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
