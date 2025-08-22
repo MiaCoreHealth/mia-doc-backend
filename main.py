@@ -1,4 +1,4 @@
-# backend/main.py
+# backend/main.py (E-posta doğrulaması devre dışı bırakılmış son hali)
 
 # --- Gerekli Kütüphaneler ---
 import os
@@ -12,37 +12,27 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 
-# SendGrid kütüphanesi
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
-
 # Gemini ve Resim işleme kütüphaneleri
 import google.generativeai as genai
 from PIL import Image
 import io
 
 # Projemizin diğer dosyaları
-import models
-import schemas
-import security
-from database import engine, SessionLocal
+from . import models
+from . import schemas
+from . import security
+from .database import engine, SessionLocal
 
 # --- Kurulum ve Yapılandırma ---
-
-# API Anahtarlarını Ortam Değişkenlerinden Oku
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
-SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
-
-# Veritabanı tablolarını oluştur
 models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI(root_path="/")
+app = FastAPI()
 
 # --- CORS Ayarları ---
 origins = [
-    "http://localhost:3000",                  # Kendi bilgisayarımızda test için
-    "https://mia-doc-frontend.vercel.app",      # Sizin yeni canlı sitenizin adresi
+    "http://localhost:3000",
+    "https://mia-doc-frontend.vercel.app",
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -77,38 +67,31 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None: raise credentials_exception
     return user
 
-# --- E-posta Gönderme Fonksiyonu ---
-def send_verification_email(email: str, token: str):
-    api_key = os.environ.get('SENDGRID_API_KEY')
-    print(f"--- DIAGNOSTIC: SendGrid API Anahtarını Okumayı Denedim. Anahtar Var mı?: {api_key is not None}, İlk 5 Karakter: {str(api_key)[:5]}")
-    verification_url = f"https://mia-doc-projesi-zmsw.vercel.app/verify-email?token={token}"
-    message = Mail(
-        from_email=('noreply@mia-doc.com', 'MİA-DOC Asistan'),
-        to_emails=email,
-        subject='MİA-DOC Hesabınızı Doğrulayın',
-        html_content=f"""<div style="font-family: sans-serif; text-align: center; padding: 20px;">...</div>""" # Kısaltıldı
-    )
-    try:
-        sendgrid_client = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sendgrid_client.send(message)
-    except Exception as e:
-        print(f"E-posta gönderme hatası: {e}")
-
 # --- API Endpoints ---
 
 @app.post("/register/")
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # ... (Register fonksiyonu aynı)
-    return {"mesaj": "Kayıt başarılı! Lütfen e-posta adresinize gönderilen doğrulama linkine tıklayarak hesabınızı aktive edin."}
-
-@app.get("/verify-email/", response_class=HTMLResponse)
-def verify_email(token: str, db: Session = Depends(get_db)):
-    # ... (Verify-email fonksiyonu aynı)
-    return HTMLResponse(content="<h1>Teşekkürler!</h1><p>Hesabınız başarıyla doğrulandı. Artık uygulamaya giriş yapabilirsiniz.</p>")
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kayıtlı.")
+    # is_active=True olduğu için kullanıcı direkt aktif olacak
+    new_user = models.User(email=user.email, hashed_password=security.hash_password(user.password))
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"mesaj": "Kayıt başarıyla tamamlandı. Artık giriş yapabilirsiniz."}
 
 @app.post("/token")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # ... (Token fonksiyonu aynı)
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    if not user or not security.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-posta veya şifre hatalı.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # E-posta doğrulama kontrolü buradan kaldırıldı.
+    access_token = security.create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me/", response_model=schemas.User)
@@ -133,16 +116,13 @@ async def analyze_report(file: UploadFile = File(...), current_user: models.User
     img = Image.open(io.BytesIO(contents))
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
     
-    # --- AKILLI PROMPT OLUŞTURMA ---
     profile_info = "HASTANIN BİLİNEN SAĞLIK GEÇMİŞİ (Yorumlarını bu bilgilere göre kişiselleştir):\n"
-    
     if current_user.date_of_birth:
         today = date.today()
         age = today.year - current_user.date_of_birth.year - ((today.month, today.day) < (current_user.date_of_birth.month, current_user.date_of_birth.day))
         profile_info += f"- Yaş: {age}\n"
     else:
         profile_info += "- Yaş: Belirtilmemiş\n"
-
     profile_info += f"- Cinsiyet: {current_user.gender or 'Belirtilmemiş'}\n"
     if current_user.height_cm and current_user.weight_kg:
         bmi = round(current_user.weight_kg / ((current_user.height_cm / 100) ** 2), 1)
@@ -172,7 +152,6 @@ async def analyze_report(file: UploadFile = File(...), current_user: models.User
         response = model.generate_content([prompt_final, img], stream=True)
         response.resolve()
         analysis_text = response.text
-
         new_report = models.Report(
             original_filename=file.filename,
             analysis_result=analysis_text,
