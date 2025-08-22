@@ -41,9 +41,8 @@ app = FastAPI(root_path="/")
 
 # --- CORS Ayarları ---
 origins = [
-    "http://localhost:3000",
-    "https://mia-doc-projesi.vercel.app", 
-    "https://fronted-production-7691.up.railway.app", # YENİ EKLENEN ADRES
+    "http://localhost:3000",                  # Kendi bilgisayarımızda test için
+    "https://mia-doc-frontend.vercel.app",      # Sizin yeni canlı sitenizin adresi
 ]
 app.add_middleware(
     CORSMiddleware,
