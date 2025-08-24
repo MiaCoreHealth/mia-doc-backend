@@ -30,7 +30,6 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # --- CORS, DB, Auth Yardımcıları ---
-# (Bu bölümlerde değişiklik yok, olduğu gibi kalmalı)
 origins = [
     "http://localhost:3000",
     "https://mia-doc-frontend.vercel.app",
@@ -48,7 +47,9 @@ def get_db():
         yield db
     finally:
         db.close()
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -67,7 +68,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 # --- API Endpoints ---
 
 @app.post("/register/")
-# (Register fonksiyonu aynı, değişiklik yok)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
@@ -77,26 +77,26 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return {"mesaj": "Kayıt başarıyla tamamlandı. Artık giriş yapabilirsiniz."}
 
 @app.post("/token")
-# (Token fonksiyonu aynı, değişiklik yok)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not security.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-posta veya şifre hatalı.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-posta veya şifre hatalı.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     access_token = security.create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me/", response_model=schemas.User)
-# (users/me fonksiyonu aynı, değişiklik yok)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 @app.get("/profile/me/", response_model=schemas.User)
-# (get_user_profile fonksiyonu aynı, değişiklik yok)
 def get_user_profile(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 @app.post("/profile/me/", response_model=schemas.User)
-# (update_user_profile fonksiyonu aynı, değişiklik yok)
 def update_user_profile(profile_data: schemas.ProfileUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     for field, value in profile_data.model_dump(exclude_unset=True).items():
         setattr(current_user, field, value)
@@ -104,13 +104,10 @@ def update_user_profile(profile_data: schemas.ProfileUpdate, current_user: model
     return current_user
 
 @app.get("/reports/history/", response_model=list[schemas.Report])
-# (get_user_reports fonksiyonu aynı, değişiklik yok)
 def get_user_reports(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    reports = db.query(models.User).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
-     return db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
+    return db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
 
 @app.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
-# (delete_report fonksiyonu aynı, değişiklik yok)
 def delete_report(report_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     report_to_delete = db.query(models.Report).filter(models.Report.id == report_id).first()
     if not report_to_delete:
@@ -179,11 +176,11 @@ async def analyze_report(
     if file:
         contents = await file.read()
         img = Image.open(io.BytesIO(contents))
-        # İlk resim yüklemesinde sistem talimatını da gönderiyoruz
+        # Resim yüklenirken her zaman sistem talimatını gönderiyoruz
         new_content.append(system_prompt + "\n\nLütfen bu rapordaki sonuçları yorumla.")
         new_content.append(img)
     if question:
-        # Takip sorularında sadece soruyu gönderiyoruz
+        # Takip sorularında sadece soruyu gönderiyoruz, sistem talimatı chat geçmişinde zaten var
         new_content.append(question)
     
     try:
@@ -198,9 +195,7 @@ async def analyze_report(
                 owner_id=current_user.id,
                 upload_date=datetime.now(timezone.utc)
             )
-            db.add(new_report)
-            db.commit()
-            db.refresh(new_report)
+            db.add(new_report); db.commit(); db.refresh(new_report)
         
         return {"analysis_result": analysis_text}
     except Exception as e:
