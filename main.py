@@ -1,12 +1,9 @@
-# backend/main.py (Tüm kuralların eklendiği nihai sürüm)
+# backend/main.py (System Instruction ile güçlendirilmiş nihai sürüm)
 
 import os
 from datetime import date, datetime, timezone
-import shutil
-import uuid
 import json
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
-from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -45,7 +42,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None: raise credentials_exception
     return user
 
-# --- API Endpoints ---
+# --- API Endpoints (Register, Token, Profile vb. aynı kalıyor) ---
 
 @app.post("/register/")
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -94,6 +91,7 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
     db.delete(report_to_delete); db.commit()
     return
 
+# --- ANA ANALİZ FONKSİYONU (DÜZELTİLMİŞ) ---
 @app.post("/report/analyze/")
 async def analyze_report(
     file: UploadFile = File(None),
@@ -103,9 +101,7 @@ async def analyze_report(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
-
-    # --- YENİ VE GÜÇLENDİRİLMİŞ SİSTEM TALİMATI ---
+    # --- SİSTEM TALİMATI OLUŞTURMA ---
     system_prompt = """
     Senin adın MiaCore Health Sağlık Asistanı. Sen, bir doktorun hastasıyla konuşuyormuş gibi davranan, empatik, sakin ve profesyonel bir yapay zeka sağlık asistanısın. Görevin, sana verilen tıbbi rapor görselini veya metin tabanlı soruları, hastanın kişisel sağlık geçmişini de dikkate alarak yorumlamaktır.
     """
@@ -122,27 +118,30 @@ async def analyze_report(
             profile_info += f"- Kronik Hastalıklar: {current_user.chronic_diseases}\n"
         if current_user.medications:
             profile_info += f"- Sürekli İlaçlar: {current_user.medications}\n"
-        # Diğer profil bilgileri buraya eklenebilir.
         system_prompt += profile_info
 
-    # --- EN ÖNEMLİ KURALLAR ---
     system_prompt += """
     \n\nYORUMLAMA KURALLARIN (Bu kurallar kesindir ve dışına çıkılamaz):
     1.  **GÖREV SINIRLARI:** Senin tek görevin sağlıkla ilgili konulardır. Tıp, biyoloji, sağlık raporları veya hastanın sunduğu sağlık durumu dışındaki konularda (örneğin finans, siyaset, spor, borsa vb.) bir soru sorulursa, KESİNLİKLE cevap verme. Bunun yerine kibarca, "Ben bir sağlık asistanıyım ve sadece uzmanlık alanımla ilgili sorulara cevap verebilirim." gibi bir yanıt ver.
 
     2.  **GÜVENLİK VE MANTIK KONTROLÜ:** Yorum yapmadan önce, sana verilen raporun içeriği ile hastanın profil bilgileri (özellikle yaş ve cinsiyet) arasında bariz bir biyolojik veya mantıksal çelişki olup olmadığını KESİNLİKLE kontrol et. Örneğin, bir erkeğe ait profilde hamilelik ultrasonu veya bir çocuğa ait profilde prostat raporu olması gibi. EĞER BÖYLE BİR ÇELİŞKİ VARSA, raporu normal şekilde yorumlama. Bunun yerine, kibarca ve net bir şekilde şu uyarıyı ver: 'Yüklediğiniz rapor ile profil bilgileriniz arasında bir tutarsızlık tespit ettim. Lütfen doğru raporu yüklediğinizden veya profil bilgilerinizin güncel olduğundan emin olun.' Bu durumda başka bir yorum yapma.
 
-    3.  **YORUMLAMA (Eğer çelişki ve konu dışı soru yoksa):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap. Örneğin, diyabeti olan birinin kan şekeri değerini yorumlarken bu bilgiyi kullan.
+    3.  **YORUMLAMA (Eğer çelişki ve konu dışı soru yoksa):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap.
 
-    4.  **ASLA TEŞHİS KOYMA:** Yorumların ne kadar detaylı olursa olsun, asla tıbbi bir teşhis koyma. "Bu durum X hastalığına işaret ediyor" gibi ifadelerden kaçın.
+    4.  **ASLA TEŞHİS KOYMA ve TEDAVİ ÖNERME.**
 
-    5.  **ASLA TEDAVİ ÖNERME:** İlaç tavsiyesi, tedavi yöntemi veya diyet listesi gibi önerilerde bulunma.
+    5.  **DOKTORA YÖNLENDİR:** Her yorumunun sonunda, kullanıcının mutlaka bir doktora danışması gerektiğini açıkça belirt.
 
-    6.  **DOKTORA YÖNLENDİR:** Her yorumunun sonunda, kullanıcının mutlaka bir doktora danışması gerektiğini açıkça belirt.
-
-    7.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu standart uyarıyı ekle: "Bu yorumlar yapay zeka tarafından üretilmiştir ve tıbbi bir teşhis niteliği taşımaz. Sağlığınızla ilgili herhangi bir karar vermeden önce mutlaka bir doktora danışmalısınız."
+    6.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu standart uyarıyı ekle: "Bu yorumlar yapay zeka tarafından üretilmiştir ve tıbbi bir teşhis niteliği taşımaz. Sağlığınızla ilgili herhangi bir karar vermeden önce mutlaka bir doktora danışmalısınız."
     """
 
+    # --- DEĞİŞİKLİK BURADA: Modeli, sistem talimatı ile birlikte başlatıyoruz ---
+    model = genai.GenerativeModel(
+        'gemini-1.5-flash-latest',
+        system_instruction=system_prompt
+    )
+
+    # Sohbet geçmişini hazırla
     gemini_history = []
     try:
         frontend_history = json.loads(history_json)
@@ -154,11 +153,8 @@ async def analyze_report(
 
     # Model ile konuşmayı başlat
     chat = model.start_chat(history=gemini_history)
-    
-    # Sistemin rolünü ve kurallarını ilk mesaj olarak gönder (eğer sohbet yeni başlıyorsa)
-    if not gemini_history:
-        chat.send_message(system_prompt)
 
+    # Kullanıcının yeni mesajını oluştur
     new_content = []
     if file:
         contents = await file.read()
@@ -175,6 +171,7 @@ async def analyze_report(
         response = chat.send_message(new_content)
         analysis_text = response.text
 
+        # Eğer ilk mesaj bir dosya ise ve başkası için değilse, veritabanına kaydet
         if file and not for_someone_else:
             new_report = models.Report(
                 original_filename=file.filename,
