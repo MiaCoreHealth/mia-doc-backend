@@ -5,7 +5,8 @@ import os
 from datetime import date, datetime, timezone
 import shutil
 import uuid
-from fastapi import FastAPI, Depends, HTTPException, status, Request, File, UploadFile, Form
+import json
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -110,19 +111,20 @@ def update_user_profile(profile_data: schemas.ProfileUpdate, current_user: model
 
 @app.post("/report/analyze/")
 async def analyze_report(
-    file: UploadFile = File(...), 
+    file: UploadFile = File(None), 
+    question: str = Form(None),
+    history_json: str = Form("[]"),
     for_someone_else: bool = Form(False),
     current_user: models.User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
-    contents = await file.read()
-    img = Image.open(io.BytesIO(contents))
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
     
-    prompt_base = """
+    gemini_history = []
+    
+    system_prompt = """
     Senin adın MİA-DOC. Sen, bir doktorun hastasıyla konuşuyormuş gibi davranan, empatik, sakin ve profesyonel bir yapay zeka sağlık asistanısın. Görevin, sana verilen tıbbi rapor görselini, hastanın kişisel sağlık geçmişini de dikkate alarak yorumlamaktır.
     """
-    
     if not for_someone_else:
         profile_info = "HASTANIN BİLİNEN SAĞLIK GEÇMİŞİ (Yorumlarını bu bilgilere göre kişiselleştir):\n"
         if current_user.date_of_birth:
@@ -141,25 +143,33 @@ async def analyze_report(
         profile_info += f"- Sigara Kullanımı: {current_user.smoking_status or 'Belirtilmemiş'}\n"
         profile_info += f"- Alkol Kullanımı: {current_user.alcohol_status or 'Belirtilmemiş'}\n"
         profile_info += f"- Hamilelik Durumu: {current_user.pregnancy_status or 'Belirtilmemiş'}\n"
-        prompt_base += profile_info
+        system_prompt += profile_info
 
-    prompt_final = prompt_base + """
-    YORUMLAMA KURALLARIN:
-    1.  **ÖNCELİK 1: GÜVENLİK VE MANTIK KONTROLÜ:** Yorum yapmadan önce, sana verilen raporun içeriği ile hastanın profil bilgileri (özellikle yaş ve cinsiyet) arasında bariz bir biyolojik veya mantıksal çelişki olup olmadığını KESİNLİKLE kontrol et. Örneğin, bir erkeğe ait profilde hamilelik ultrasonu veya bir çocuğa ait profilde prostat raporu olması gibi. EĞER BÖYLE BİR ÇELİŞKİ VARSA, raporu normal şekilde yorumlama. Bunun yerine, kibarca ve net bir şekilde şu uyarıyı ver: 'Yüklediğiniz rapor ile profil bilgileriniz arasında bir tutarsızlık tespit ettim. Lütfen doğru raporu yüklediğinizden veya profil bilgilerinizin güncel olduğundan emin olun.' Bu durumda başka bir yorum yapma.
-    2.  **YORUMLAMA (Eğer çelişki yoksa):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap. Örneğin, diyabeti olan birinin kan şekeri değerini yorumlarken bu bilgiyi kullan.
-    3.  **ASLA TEŞHİS KOYMA.**
-    4.  **ASLA TEDAVİ ÖNERME.**
-    5.  **YORUMLA VE BİLGİLENDİR.**
-    6.  **DOKTORA YÖNLENDİR.**
-    7.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu uyarıyı ekle: "Bu yorumlar tıbbi bir teşhis niteliği taşımaz..."
-    """
+    try:
+        frontend_history = json.loads(history_json)
+        for msg in frontend_history:
+            if "Merhaba" in msg['text'] and msg['sender'] == 'mia-doc':
+                continue
+            role = "user" if msg['sender'] == "user" else "model"
+            gemini_history.append({'role': role, 'parts': [{'text': msg['text']}]})
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Geçersiz sohbet geçmişi formatı.")
+
+    new_content = []
+    if file:
+        contents = await file.read()
+        img = Image.open(io.BytesIO(contents))
+        new_content.append(system_prompt + "\n\nLütfen bu rapordaki sonuçları, YORUMLAMA KURALLARINA uyarak yorumla.")
+        new_content.append(img)
+    if question:
+        new_content.append(question)
     
     try:
-        response = model.generate_content([prompt_final, img], stream=True)
-        response.resolve()
+        chat = model.start_chat(history=gemini_history)
+        response = chat.send_message(new_content)
         analysis_text = response.text
 
-        if not for_someone_else:
+        if file and not for_someone_else:
             new_report = models.Report(
                 original_filename=file.filename,
                 analysis_result=analysis_text,
