@@ -1,7 +1,19 @@
 # backend/schemas.py
+
 import datetime
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
+
+# YENİ: Sohbet mesajlarını temsil eden model
+class ChatMessage(BaseModel):
+    sender: str
+    text: str
+
+# YENİ: Frontend'den gelecek olan konuşma isteğini temsil eden model
+class ConversationRequest(BaseModel):
+    question: Optional[str] = None
+    # Dosya yüklemesi ilk istekte olacağı için, geçmiş artık sadece metin tabanlı mesajları içerir.
+    history: List[ChatMessage] = []
 
 class ProfileUpdate(BaseModel):
     chronic_diseases: Optional[str] = None
