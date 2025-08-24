@@ -18,10 +18,10 @@ from PIL import Image
 import io
 
 # Projemizin diğer dosyaları
-import models
-import schemas
-import security
-from database import engine, SessionLocal
+from . import models
+from . import schemas
+from . import security
+from .database import engine, SessionLocal
 
 # --- Kurulum ve Yapılandırma ---
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
@@ -74,7 +74,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kayıtlı.")
-    new_user = models.User(email=user.email, hashed_password=security.hash_password(user.password))
+    new_user = models.User(email=user.email, hashed_password=security.hash_password(user.password), is_active=True) # is_active=True e-posta doğrulaması kapalı olduğu için
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -144,13 +144,16 @@ async def analyze_report(
         prompt_base += profile_info
 
     prompt_final = prompt_base + """
+
     YORUMLAMA KURALLARIN:
-    1.  Eğer hastanın geçmiş bilgileri varsa, yorumlarını bu bağlamda yap.
-    2.  **ASLA TEŞHİS KOYMA.**
-    3.  **ASLA TEDAVİ ÖNERME.**
-    4.  **YORUMLA VE BİLGİLENDİR.**
-    5.  **DOKTORA YÖNLENDİR.**
-    6.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu uyarıyı ekle: "Bu yorumlar tıbbi bir teşhis niteliği taşımaz..."
+    1.  **ÖNCELİK 1: GÜVENLİK VE MANTIK KONTROLÜ:** Yorum yapmadan önce, sana verilen raporun içeriği ile hastanın profil bilgileri (özellikle yaş ve cinsiyet) arasında bariz bir biyolojik veya mantıksal çelişki olup olmadığını KESİNLİKLE kontrol et. Örneğin, bir erkeğe ait profilde hamilelik ultrasonu veya bir çocuğa ait profilde prostat raporu olması gibi. EĞER BÖYLE BİR ÇELİŞKİ VARSA, raporu normal şekilde yorumlama. Bunun yerine, kibarca ve net bir şekilde şu uyarıyı ver: 'Yüklediğiniz rapor ile profil bilgileriniz arasında bir tutarsızlık tespit ettim. Lütfen doğru raporu yüklediğinizden veya profil bilgilerinizin güncel olduğundan emin olun.' Bu durumda başka bir yorum yapma.
+
+    2.  **YORUMLAMA (Eğer çelişki yoksa):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap. Örneğin, diyabeti olan birinin kan şekeri değerini yorumlarken bu bilgiyi kullan.
+    3.  **ASLA TEŞHİS KOYMA.**
+    4.  **ASLA TEDAVİ ÖNERME.**
+    5.  **YORUMLA VE BİLGİLENDİR.**
+    6.  **DOKTORA YÖNLENDİR.**
+    7.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu uyarıyı ekle: "Bu yorumlar tıbbi bir teşhis niteliği taşımaz..."
     """
     
     try:
