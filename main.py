@@ -1,6 +1,5 @@
 # backend/main.py
 
-# --- Gerekli Kütüphaneler ---
 import os
 from datetime import date, datetime, timezone
 import shutil
@@ -30,7 +29,8 @@ genai.configure(api_key=GOOGLE_API_KEY)
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
-# --- CORS Ayarları ---
+# --- CORS, DB, Auth Yardımcıları ---
+# (Bu bölümlerde değişiklik yok, olduğu gibi kalmalı)
 origins = [
     "http://localhost:3000",
     "https://mia-doc-frontend.vercel.app",
@@ -42,17 +42,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# --- Veritabanı ve Kimlik Doğrulama Yardımcıları ---
 def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,43 +67,58 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 # --- API Endpoints ---
 
 @app.post("/register/")
+# (Register fonksiyonu aynı, değişiklik yok)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kayıtlı.")
     new_user = models.User(email=user.email, hashed_password=security.hash_password(user.password), is_active=True)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    db.add(new_user); db.commit(); db.refresh(new_user)
     return {"mesaj": "Kayıt başarıyla tamamlandı. Artık giriş yapabilirsiniz."}
 
 @app.post("/token")
+# (Token fonksiyonu aynı, değişiklik yok)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not security.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-posta veya şifre hatalı.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-posta veya şifre hatalı.")
     access_token = security.create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me/", response_model=schemas.User)
+# (users/me fonksiyonu aynı, değişiklik yok)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 @app.get("/profile/me/", response_model=schemas.User)
+# (get_user_profile fonksiyonu aynı, değişiklik yok)
 def get_user_profile(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 @app.post("/profile/me/", response_model=schemas.User)
+# (update_user_profile fonksiyonu aynı, değişiklik yok)
 def update_user_profile(profile_data: schemas.ProfileUpdate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     for field, value in profile_data.model_dump(exclude_unset=True).items():
         setattr(current_user, field, value)
-    db.commit()
-    db.refresh(current_user)
+    db.commit(); db.refresh(current_user)
     return current_user
+
+@app.get("/reports/history/", response_model=list[schemas.Report])
+# (get_user_reports fonksiyonu aynı, değişiklik yok)
+def get_user_reports(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    reports = db.query(models.User).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
+    return reports
+
+@app.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
+# (delete_report fonksiyonu aynı, değişiklik yok)
+def delete_report(report_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    report_to_delete = db.query(models.Report).filter(models.Report.id == report_id).first()
+    if not report_to_delete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rapor bulunamadı.")
+    if report_to_delete.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu raporu silme yetkiniz yok.")
+    db.delete(report_to_delete); db.commit()
+    return
 
 @app.post("/report/analyze/")
 async def analyze_report(
@@ -123,10 +134,10 @@ async def analyze_report(
     gemini_history = []
     
     system_prompt = """
-    Senin adın MİA-DOC. Sen, bir doktorun hastasıyla konuşuyormuş gibi davranan, empatik, sakin ve profesyonel bir yapay zeka sağlık asistanısın. Görevin, sana verilen tıbbi rapor görselini, hastanın kişisel sağlık geçmişini de dikkate alarak yorumlamaktır.
+    Senin adın MiaCore Health Sağlık Asistanı. Sen, bir doktorun hastasıyla konuşuyormuş gibi davranan, empatik, sakin ve profesyonel bir yapay zeka sağlık asistanısın. Görevin, sana verilen tıbbi rapor görselini ve takip sorularını, hastanın kişisel sağlık geçmişini de dikkate alarak yorumlamaktır.
     """
     if not for_someone_else:
-        profile_info = "HASTANIN BİLİNEN SAĞLIK GEÇMİŞİ (Yorumlarını bu bilgilere göre kişiselleştir):\n"
+        profile_info = "\nHASTANIN BİLİNEN SAĞLIK GEÇMİŞİ (Yorumlarını bu bilgilere göre kişiselleştir):\n"
         if current_user.date_of_birth:
             today = date.today()
             age = today.year - current_user.date_of_birth.year - ((today.month, today.day) < (current_user.date_of_birth.month, current_user.date_of_birth.day))
@@ -145,11 +156,20 @@ async def analyze_report(
         profile_info += f"- Hamilelik Durumu: {current_user.pregnancy_status or 'Belirtilmemiş'}\n"
         system_prompt += profile_info
 
+    system_prompt += """
+    \nYORUMLAMA KURALLARIN:
+    1.  **ÖNCELİK 1: GÜVENLİK VE MANTIK KONTROLÜ:** Yorum yapmadan önce, sana verilen raporun içeriği ile hastanın profil bilgileri (özellikle yaş ve cinsiyet) arasında bariz bir biyolojik veya mantıksal çelişki olup olmadığını KESİNLİKLE kontrol et. Örneğin, bir erkeğe ait profilde hamilelik ultrasonu veya bir çocuğa ait profilde prostat raporu olması gibi. EĞER BÖYLE BİR ÇELİŞKİ VARSA, raporu normal şekilde yorumlama. Bunun yerine, kibarca ve net bir şekilde şu uyarıyı ver: 'Yüklediğiniz rapor ile profil bilgileriniz arasında bir tutarsızlık tespit ettim. Lütfen doğru raporu yüklediğinizden veya profil bilgilerinizin güncel olduğundan emin olun.' Bu durumda başka bir yorum yapma.
+    2.  **YORUMLAMA (Eğer çelişki yoksa):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap. Örneğin, diyabeti olan birinin kan şekeri değerini yorumlarken bu bilgiyi kullan.
+    3.  **ASLA TEŞHİS KOYMA.**
+    4.  **ASLA TEDAVİ ÖNERME.**
+    5.  **BAĞLAMI KORU:** Eğer bir konuşma geçmişi varsa, yeni cevabını o geçmişe uygun bir şekilde ver.
+    6.  **DOKTORA YÖNLENDİR.**
+    7.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu uyarıyı ekle: "Bu yorumlar tıbbi bir teşhis niteliği taşımaz. Lütfen sonuçlarınızı sizi takip eden hekimle veya başka bir sağlık profesyoneliyle yüz yüze görüşünüz."
+    """
+    
     try:
         frontend_history = json.loads(history_json)
         for msg in frontend_history:
-            if "Merhaba" in msg['text'] and msg['sender'] == 'mia-doc':
-                continue
             role = "user" if msg['sender'] == "user" else "model"
             gemini_history.append({'role': role, 'parts': [{'text': msg['text']}]})
     except json.JSONDecodeError:
@@ -159,9 +179,11 @@ async def analyze_report(
     if file:
         contents = await file.read()
         img = Image.open(io.BytesIO(contents))
-        new_content.append(system_prompt + "\n\nLütfen bu rapordaki sonuçları, YORUMLAMA KURALLARINA uyarak yorumla.")
+        # İlk resim yüklemesinde sistem talimatını da gönderiyoruz
+        new_content.append(system_prompt + "\n\nLütfen bu rapordaki sonuçları yorumla.")
         new_content.append(img)
     if question:
+        # Takip sorularında sadece soruyu gönderiyoruz
         new_content.append(question)
     
     try:
@@ -183,19 +205,3 @@ async def analyze_report(
         return {"analysis_result": analysis_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Yapay zeka ile iletişim sırasında bir hata oluştu: {str(e)}")
-
-@app.get("/reports/history/", response_model=list[schemas.Report])
-def get_user_reports(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    reports = db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
-    return reports
-
-@app.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_report(report_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    report_to_delete = db.query(models.Report).filter(models.Report.id == report_id).first()
-    if not report_to_delete:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rapor bulunamadı.")
-    if report_to_delete.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu raporu silme yetkiniz yok.")
-    db.delete(report_to_delete)
-    db.commit()
-    return
