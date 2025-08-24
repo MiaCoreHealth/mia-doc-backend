@@ -1,4 +1,4 @@
-# backend/main.py
+# backend/main.py (Tüm kuralların eklendiği nihai sürüm)
 
 import os
 from datetime import date, datetime, timezone
@@ -11,13 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
-
-# Gemini ve Resim işleme kütüphaneleri
 import google.generativeai as genai
 from PIL import Image
 import io
 
-# Projemizin diğer dosyaları
 import models
 import schemas
 import security
@@ -30,32 +27,15 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # --- CORS, DB, Auth Yardımcıları ---
-origins = [
-    "http://localhost:3000",
-    "https://mia-doc-frontend.vercel.app",
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+origins = [ "http://localhost:3000", "https://mia-doc-frontend.vercel.app" ]
+app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 def get_db():
     db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+    try: yield db
+    finally: db.close()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
     try:
         payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
         email: str = payload.get("sub")
@@ -80,11 +60,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not security.verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-posta veya şifre hatalı.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-posta veya şifre hatalı.")
     access_token = security.create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -105,7 +81,8 @@ def update_user_profile(profile_data: schemas.ProfileUpdate, current_user: model
 
 @app.get("/reports/history/", response_model=list[schemas.Report])
 def get_user_reports(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
+    reports = db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
+    return reports
 
 @app.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_report(report_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -119,52 +96,54 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
 
 @app.post("/report/analyze/")
 async def analyze_report(
-    file: UploadFile = File(None), 
+    file: UploadFile = File(None),
     question: str = Form(None),
     history_json: str = Form("[]"),
     for_someone_else: bool = Form(False),
-    current_user: models.User = Depends(get_current_user), 
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
-    
-    gemini_history = []
-    
+
+    # --- YENİ VE GÜÇLENDİRİLMİŞ SİSTEM TALİMATI ---
     system_prompt = """
-    Senin adın MiaCore Health Sağlık Asistanı. Sen, bir doktorun hastasıyla konuşuyormuş gibi davranan, empatik, sakin ve profesyonel bir yapay zeka sağlık asistanısın. Görevin, sana verilen tıbbi rapor görselini ve takip sorularını, hastanın kişisel sağlık geçmişini de dikkate alarak yorumlamaktır.
+    Senin adın MiaCore Health Sağlık Asistanı. Sen, bir doktorun hastasıyla konuşuyormuş gibi davranan, empatik, sakin ve profesyonel bir yapay zeka sağlık asistanısın. Görevin, sana verilen tıbbi rapor görselini veya metin tabanlı soruları, hastanın kişisel sağlık geçmişini de dikkate alarak yorumlamaktır.
     """
+
     if not for_someone_else:
-        profile_info = "\nHASTANIN BİLİNEN SAĞLIK GEÇMİŞİ (Yorumlarını bu bilgilere göre kişiselleştir):\n"
+        profile_info = "\n\nHASTANIN BİLİNEN SAĞLIK GEÇMİŞİ (Yorumlarını bu bilgilere göre kişiselleştir):\n"
         if current_user.date_of_birth:
             today = date.today()
             age = today.year - current_user.date_of_birth.year - ((today.month, today.day) < (current_user.date_of_birth.month, current_user.date_of_birth.day))
             profile_info += f"- Yaş: {age}\n"
-        else:
-            profile_info += "- Yaş: Belirtilmemiş\n"
-        profile_info += f"- Cinsiyet: {current_user.gender or 'Belirtilmemiş'}\n"
-        if current_user.height_cm and current_user.weight_kg:
-            bmi = round(current_user.weight_kg / ((current_user.height_cm / 100) ** 2), 1)
-            profile_info += f"- Boy: {current_user.height_cm} cm, Kilo: {current_user.weight_kg} kg (VKİ: {bmi})\n"
-        profile_info += f"- Kronik Hastalıkları: {current_user.chronic_diseases or 'Belirtilmemiş'}\n"
-        profile_info += f"- Sürekli Kullandığı İlaçlar: {current_user.medications or 'Belirtilmemiş'}\n"
-        profile_info += f"- Aile Öyküsü: {current_user.family_history or 'Belirtilmemiş'}\n"
-        profile_info += f"- Sigara Kullanımı: {current_user.smoking_status or 'Belirtilmemiş'}\n"
-        profile_info += f"- Alkol Kullanımı: {current_user.alcohol_status or 'Belirtilmemiş'}\n"
-        profile_info += f"- Hamilelik Durumu: {current_user.pregnancy_status or 'Belirtilmemiş'}\n"
+        if current_user.gender:
+            profile_info += f"- Cinsiyet: {current_user.gender}\n"
+        if current_user.chronic_diseases:
+            profile_info += f"- Kronik Hastalıklar: {current_user.chronic_diseases}\n"
+        if current_user.medications:
+            profile_info += f"- Sürekli İlaçlar: {current_user.medications}\n"
+        # Diğer profil bilgileri buraya eklenebilir.
         system_prompt += profile_info
 
+    # --- EN ÖNEMLİ KURALLAR ---
     system_prompt += """
-    \nYORUMLAMA KURALLARIN:
-    1.  **ÖNCELİK 1: GÖREV DIŞI KONTROLÜ:** Sana sorulan takip sorularının, hastanın sağlık durumu veya sana sunulan tıbbi raporla ilgili olup olmadığını kontrol et. Eğer soru, "Türkiye borsaları ne olacak?", "Bugün hava nasıl?" gibi tamamen alakasız bir konuysa, raporu yorumlama. Bunun yerine, kibarca ve net bir şekilde şu cevabı ver: 'Ben bir sağlık asistanıyım ve sadece tıbbi raporlarınız ve sağlık durumunuzla ilgili sorularınıza yardımcı olabilirim.'
-    2.  **ÖNCELİK 2: GÜVENLİK VE MANTIK KONTROLÜ:** Eğer soru sağlıkla ilgiliyse, yorum yapmadan önce, sana verilen raporun içeriği ile hastanın profil bilgileri (özellikle yaş ve cinsiyet) arasında bariz bir biyolojik veya mantıksal çelişki olup olmadığını KESİNLİKLE kontrol et. Örneğin, bir erkeğe ait profilde hamilelik ultrasonu veya bir çocuğa ait profilde prostat raporu olması gibi. EĞER BÖYLE BİR ÇELİŞKİ VARSA, raporu normal şekilde yorumlama. Bunun yerine, kibarca ve net bir şekilde şu uyarıyı ver: 'Yüklediğiniz rapor ile profil bilgileriniz arasında bir tutarsızlık tespit ettim. Lütfen doğru raporu yüklediğinizden veya profil bilgilerinizin güncel olduğundan emin olun.' Bu durumda başka bir yorum yapma.
-    3.  **YORUMLAMA (Eğer ilk iki kural geçilirse):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap.
-    4.  **ASLA TEŞHİS KOYMA.**
-    5.  **ASLA TEDAVİ ÖNERME.**
-    6.  **BAĞLAMI KORU:** Konuşma geçmişine uygun cevaplar ver.
-    7.  **DOKTORA YÖNLENDİR.**
-    8.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu uyarıyı ekle: "Bu yorumlar tıbbi bir teşhis niteliği taşımaz. Lütfen sonuçlarınızı sizi takip eden hekimle veya başka bir sağlık profesyoneliyle yüz yüze görüşünüz."
+    \n\nYORUMLAMA KURALLARIN (Bu kurallar kesindir ve dışına çıkılamaz):
+    1.  **GÖREV SINIRLARI:** Senin tek görevin sağlıkla ilgili konulardır. Tıp, biyoloji, sağlık raporları veya hastanın sunduğu sağlık durumu dışındaki konularda (örneğin finans, siyaset, spor, borsa vb.) bir soru sorulursa, KESİNLİKLE cevap verme. Bunun yerine kibarca, "Ben bir sağlık asistanıyım ve sadece uzmanlık alanımla ilgili sorulara cevap verebilirim." gibi bir yanıt ver.
+
+    2.  **GÜVENLİK VE MANTIK KONTROLÜ:** Yorum yapmadan önce, sana verilen raporun içeriği ile hastanın profil bilgileri (özellikle yaş ve cinsiyet) arasında bariz bir biyolojik veya mantıksal çelişki olup olmadığını KESİNLİKLE kontrol et. Örneğin, bir erkeğe ait profilde hamilelik ultrasonu veya bir çocuğa ait profilde prostat raporu olması gibi. EĞER BÖYLE BİR ÇELİŞKİ VARSA, raporu normal şekilde yorumlama. Bunun yerine, kibarca ve net bir şekilde şu uyarıyı ver: 'Yüklediğiniz rapor ile profil bilgileriniz arasında bir tutarsızlık tespit ettim. Lütfen doğru raporu yüklediğinizden veya profil bilgilerinizin güncel olduğundan emin olun.' Bu durumda başka bir yorum yapma.
+
+    3.  **YORUMLAMA (Eğer çelişki ve konu dışı soru yoksa):** Yorumlarını MUTLAKA hastanın sağlık geçmişine göre yap. Örneğin, diyabeti olan birinin kan şekeri değerini yorumlarken bu bilgiyi kullan.
+
+    4.  **ASLA TEŞHİS KOYMA:** Yorumların ne kadar detaylı olursa olsun, asla tıbbi bir teşhis koyma. "Bu durum X hastalığına işaret ediyor" gibi ifadelerden kaçın.
+
+    5.  **ASLA TEDAVİ ÖNERME:** İlaç tavsiyesi, tedavi yöntemi veya diyet listesi gibi önerilerde bulunma.
+
+    6.  **DOKTORA YÖNLENDİR:** Her yorumunun sonunda, kullanıcının mutlaka bir doktora danışması gerektiğini açıkça belirt.
+
+    7.  **ZORUNLU UYARI:** Cevabının en sonunda MUTLAKA şu standart uyarıyı ekle: "Bu yorumlar yapay zeka tarafından üretilmiştir ve tıbbi bir teşhis niteliği taşımaz. Sağlığınızla ilgili herhangi bir karar vermeden önce mutlaka bir doktora danışmalısınız."
     """
-    
+
+    gemini_history = []
     try:
         frontend_history = json.loads(history_json)
         for msg in frontend_history:
@@ -173,19 +152,26 @@ async def analyze_report(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Geçersiz sohbet geçmişi formatı.")
 
+    # Model ile konuşmayı başlat
+    chat = model.start_chat(history=gemini_history)
+    
+    # Sistemin rolünü ve kurallarını ilk mesaj olarak gönder (eğer sohbet yeni başlıyorsa)
+    if not gemini_history:
+        chat.send_message(system_prompt)
+
     new_content = []
     if file:
         contents = await file.read()
         img = Image.open(io.BytesIO(contents))
-        # Resim yüklenirken her zaman sistem talimatını gönderiyoruz
-        new_content.append(system_prompt + "\n\nLütfen bu rapordaki sonuçları yorumla.")
+        new_content.append("Lütfen bu rapordaki sonuçları yorumla.")
         new_content.append(img)
     if question:
-        # Takip sorularında sadece soruyu gönderiyoruz, sistem talimatı chat geçmişinde zaten var
         new_content.append(question)
     
+    if not new_content:
+         raise HTTPException(status_code=400, detail="Analiz için rapor veya soru gönderilmedi.")
+
     try:
-        chat = model.start_chat(history=gemini_history)
         response = chat.send_message(new_content)
         analysis_text = response.text
 
