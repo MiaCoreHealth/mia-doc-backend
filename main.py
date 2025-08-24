@@ -107,7 +107,7 @@ def update_user_profile(profile_data: schemas.ProfileUpdate, current_user: model
 # (get_user_reports fonksiyonu aynı, değişiklik yok)
 def get_user_reports(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     reports = db.query(models.User).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
-    return reports
+     return db.query(models.Report).filter(models.Report.owner_id == current_user.id).order_by(models.Report.upload_date.desc()).all()
 
 @app.delete("/reports/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 # (delete_report fonksiyonu aynı, değişiklik yok)
