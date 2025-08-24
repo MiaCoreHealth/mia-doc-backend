@@ -1,11 +1,12 @@
-# backend/main.py (Günün Tavsiyesi Fonksiyonu Eklendi)
+# backend/main.py (Giriş Hatası Düzeltilmiş Son Sürüm)
 
 import os
 from datetime import date, datetime, timezone
 import json
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
+# DÜZELTME: OAuth2PasswordRequestForm buraya eklendi
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 import google.generativeai as genai
@@ -42,7 +43,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None: raise credentials_exception
     return user
 
-# --- API Endpoints (Register, Token, Profile vb. Değişiklik Yok) ---
+# --- API Endpoints ---
 @app.post("/register/")
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
@@ -52,8 +53,9 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.add(new_user); db.commit(); db.refresh(new_user)
     return {"mesaj": "Kayıt başarıyla tamamlandı. Artık giriş yapabilirsiniz."}
 
+# DÜZELTME: 'schemas.OAuth2PasswordRequestForm' yerine 'OAuth2PasswordRequestForm' kullanıldı
 @app.post("/token")
-def login_for_access_token(form_data: schemas.OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-posta veya şifre hatalı.")
@@ -81,7 +83,6 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
     db.delete(report_to_delete); db.commit()
     return
 
-# ... (analyze_report fonksiyonu aynı, değişiklik yok)
 @app.post("/report/analyze/")
 async def analyze_report(
     file: UploadFile = File(None),
@@ -125,7 +126,7 @@ async def analyze_report(
         """
         new_content.append(task_prompt)
         contents = await file.read()
-        img = Image.open(io.io.BytesIO(contents))
+        img = Image.open(io.BytesIO(contents))
         new_content.append(img)
     if question:
         new_content.append(question)
@@ -141,8 +142,6 @@ async def analyze_report(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Yapay zeka ile iletişim sırasında bir hata oluştu: {str(e)}")
 
-
-# --- YENİ FONKSİYON: GÜNÜN SAĞLIK TAVSİYESİ ---
 @app.get("/health-tip/")
 async def get_health_tip(current_user: models.User = Depends(get_current_user)):
     try:
@@ -174,6 +173,4 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
         return {"tip": response.text.strip()}
         
     except Exception as e:
-        # Yapay zeka başarısız olursa genel bir tavsiye döndür
         return {"tip": "Bugün sağlığınız için küçük bir adım atmayı unutmayın. Bol su için!"}
-
