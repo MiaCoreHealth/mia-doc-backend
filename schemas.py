@@ -2,11 +2,11 @@ from pydantic import BaseModel
 from datetime import date, datetime
 from typing import Optional, List
 
-# YENİ: İlaç şemaları
 class MedicationBase(BaseModel):
     name: str
     dosage: str
-    frequency: str
+    # DEĞİŞİKLİK: 'frequency' yerine 'times' alanı eklendi
+    times: str
     notes: Optional[str] = None
 
 class MedicationCreate(MedicationBase):
@@ -19,7 +19,6 @@ class Medication(MedicationBase):
     class Config:
         from_attributes = True
 
-# Mevcut Rapor şemaları
 class ReportBase(BaseModel):
     original_filename: str
     analysis_result: str
@@ -35,7 +34,6 @@ class Report(ReportBase):
     class Config:
         from_attributes = True
 
-# Mevcut Profil ve Kullanıcı şemaları
 class ProfileUpdate(BaseModel):
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
@@ -58,7 +56,7 @@ class User(UserBase, ProfileUpdate):
     id: int
     is_active: bool
     reports: List[Report] = []
-    meds: List[Medication] = [] # YENİ: Kullanıcının ilaç listesi
+    meds: List[Medication] = []
 
     class Config:
         from_attributes = True

@@ -10,7 +10,6 @@ class User(Base):
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     
-    # Profil Bilgileri
     date_of_birth = Column(Date, nullable=True)
     gender = Column(String, nullable=True)
     height_cm = Column(Integer, nullable=True)
@@ -39,7 +38,8 @@ class Medication(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     dosage = Column(String)
-    frequency = Column(String)
+    # DEĞİŞİKLİK: 'frequency' yerine 'times' (saatler) alanı eklendi
+    times = Column(String) # Örn: "08:00, 20:00"
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="meds")
