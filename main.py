@@ -1,4 +1,4 @@
-# backend/main.py (İlaç Bilgisi Fonksiyonuna Timeout Eklendi)
+# backend/main.py (İlaç Bilgisi Fonksiyonu Daha Sağlam Hale Getirildi)
 
 import os
 from datetime import date, datetime, timezone
@@ -143,17 +143,24 @@ async def get_medication_info(med_name: str, current_user: models.User = Depends
 
         Cevabın kısa, net ve sadece bilgilendirme amaçlı olsun. Tıbbi tavsiye verme.
         """
-        # DEĞİŞİKLİK: 60 saniyelik zaman aşımı eklendi
         request_options = {"timeout": 60}
         response = model.generate_content(prompt, request_options=request_options)
         
-        return {"info": response.text.strip()}
+        # DEĞİŞİKLİK: Cevabı işlemeden önce varlığını kontrol ediyoruz
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            info_text = "".join(part.text for part in response.candidates[0].content.parts)
+            return {"info": info_text.strip()}
+        else:
+            # Modelin cevabı engellediği veya boş döndüğü durum
+            print(f"--- UYARI: /medication-info için modelden boş veya engellenmiş yanıt alındı ---")
+            print(f"Response Detayı: {response}")
+            raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı, modelden geçerli bir yanıt gelmedi.")
         
     except Exception as e:
         print(f"--- HATA: /medication-info endpoint'inde sorun oluştu ---")
         print(f"Hata Detayı: {e}")
         print(f"--- HATA SONU ---")
-        raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir hata oluştu.")
+        raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir sunucu hatası oluştu.")
 
 @app.post("/report/analyze/")
 async def analyze_report(
