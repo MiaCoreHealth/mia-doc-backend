@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -16,14 +16,13 @@ class User(Base):
     height_cm = Column(Integer, nullable=True)
     weight_kg = Column(Integer, nullable=True)
     chronic_diseases = Column(String, nullable=True)
-    medications = Column(String, nullable=True) # Bu satırı daha sonra yeni sisteme taşıyacağız
+    medications = Column(String, nullable=True)
     family_history = Column(String, nullable=True)
     smoking_status = Column(String, nullable=True)
     alcohol_status = Column(String, nullable=True)
     pregnancy_status = Column(String, nullable=True)
 
     reports = relationship("Report", back_populates="owner")
-    # YENİ: Kullanıcının ilaçları için ilişki
     meds = relationship("Medication", back_populates="owner", cascade="all, delete-orphan")
 
 class Report(Base):
@@ -35,13 +34,12 @@ class Report(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="reports")
 
-# YENİ: İlaçlar için veritabanı modeli
 class Medication(Base):
     __tablename__ = "medications"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    dosage = Column(String) # Örn: "500 mg", "1 tablet"
-    frequency = Column(String) # Örn: "Günde 2 kez", "Sabahları"
-    notes = Column(String, nullable=True) # Örn: "Tok karnına"
+    dosage = Column(String)
+    frequency = Column(String)
+    notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="meds")
