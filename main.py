@@ -1,4 +1,4 @@
-# backend/main.py (İlaç Bilgisi Fonksiyonuna Hata Ayıklama Eklendi)
+# backend/main.py (İlaç Bilgisi Fonksiyonuna Timeout Eklendi)
 
 import os
 from datetime import date, datetime, timezone
@@ -143,10 +143,13 @@ async def get_medication_info(med_name: str, current_user: models.User = Depends
 
         Cevabın kısa, net ve sadece bilgilendirme amaçlı olsun. Tıbbi tavsiye verme.
         """
-        response = model.generate_content(prompt)
+        # DEĞİŞİKLİK: 60 saniyelik zaman aşımı eklendi
+        request_options = {"timeout": 60}
+        response = model.generate_content(prompt, request_options=request_options)
+        
         return {"info": response.text.strip()}
+        
     except Exception as e:
-        # DEĞİŞİKLİK: Detaylı hata loglaması eklendi
         print(f"--- HATA: /medication-info endpoint'inde sorun oluştu ---")
         print(f"Hata Detayı: {e}")
         print(f"--- HATA SONU ---")
