@@ -5,10 +5,14 @@ from typing import Optional, List
 class MedicationBase(BaseModel):
     name: str
     dosage: str
+    quantity: str # YENİ
     times: str
     notes: Optional[str] = None
 
 class MedicationCreate(MedicationBase):
+    pass
+
+class MedicationUpdate(MedicationBase):
     pass
 
 class Medication(MedicationBase):

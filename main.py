@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Modüller Entegre Edildi - Tam Hali)
+# backend/main.py (İlaç Düzenleme Fonksiyonu Eklendi - Tam Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -92,6 +92,7 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
     db.delete(report_to_delete); db.commit()
     return
 
+# --- İLAÇ YÖNETİMİ ENDPOINT'LERİ ---
 @app.post("/medications/", response_model=schemas.Medication)
 def create_medication_for_user(med: schemas.MedicationCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_med = models.Medication(**med.model_dump(), owner_id=current_user.id)
@@ -104,6 +105,28 @@ def create_medication_for_user(med: schemas.MedicationCreate, db: Session = Depe
 def read_user_medications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
 
+@app.put("/medications/{med_id}", response_model=schemas.Medication)
+def update_medication(
+    med_id: int, 
+    med_update: schemas.MedicationUpdate,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    db_med = db.query(models.Medication).filter(models.Medication.id == med_id).first()
+    if not db_med:
+        raise HTTPException(status_code=404, detail="İlaç bulunamadı")
+    if db_med.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bu ilacı düzenleme yetkiniz yok")
+    
+    update_data = med_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_med, key, value)
+        
+    db.add(db_med)
+    db.commit()
+    db.refresh(db_med)
+    return db_med
+
 @app.delete("/medications/{med_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_medication(med_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     med_to_delete = db.query(models.Medication).filter(models.Medication.id == med_id).first()
@@ -113,6 +136,7 @@ def delete_medication(med_id: int, db: Session = Depends(get_db), current_user: 
     db.commit()
     return
 
+# --- YAPAY ZEKA FONKSİYONLARI ---
 @app.post("/report/analyze/")
 async def analyze_report(
     file: UploadFile = File(None),
@@ -152,7 +176,7 @@ async def analyze_report(
                 profile_info += f"- Cinsiyet: {current_user.gender}\n"
             user_meds = db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
             if user_meds:
-                profile_info += "- Kullandığı İlaçlar: " + ", ".join([med.name for med in user_meds]) + "\n"
+                profile_info += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage} ({m.quantity})" for m in user_meds]) + "\n"
             task_prompt += profile_info
         task_prompt += """
         \nÖNCELİK 1: GÜVENLİK KONTROLÜ: Raporun içeriği ile hastanın profili (yaş, cinsiyet) arasında bariz bir çelişki (örn: erkek için gebelik) varsa, raporu yorumlama. Sadece 'Yüklediğin rapor ile profil bilgilerin arasında bir tutarsızlık var gibi görünüyor, kontrol edebilir misin?' de.
@@ -197,7 +221,7 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user), 
         if current_user.chronic_diseases: profile_summary += f"- Bilinen Hastalıklar: {current_user.chronic_diseases}\n"
         user_meds = db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
         if user_meds:
-            profile_summary += "- Kullandığı İlaçlar: " + ", ".join([med.name for med in user_meds]) + "\n"
+            profile_summary += "- Kullandığı İlaçlar: " + ", ".join([m.name for m in user_meds]) + "\n"
         else:
             profile_summary += "- Bilinen bir kronik hastalığı veya kullandığı ilaç yok.\n"
         prompt = f"""
@@ -229,7 +253,7 @@ async def analyze_symptoms(
         profile_summary += f"- Kronik Hastalıklar: {current_user.chronic_diseases}\n"
     user_meds = db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
     if user_meds:
-        profile_summary += "- Kullandığı İlaçlar: " + ", ".join([f"{med.name} ({med.dosage})" for med in user_meds]) + "\n"
+        profile_summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage} ({m.quantity})" for m in user_meds]) + "\n"
     
     system_instruction_text = f"""
     Senin adın Mia. Sen, Miacore Health platformunun, kullanıcının anlattığı belirtilere göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.

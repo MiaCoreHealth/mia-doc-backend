@@ -33,13 +33,13 @@ class Report(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="reports")
 
-# DEĞİŞİKLİK: Tablo adını değiştirerek yeniden oluşturulmasını sağlıyoruz
 class Medication(Base):
-    __tablename__ = "medications_v2"
+    __tablename__ = "medications_v3" # Veritabanı şema değişikliği için tablo adını güncelliyoruz
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    dosage = Column(String)
-    times = Column(String)
+    dosage = Column(String) # Örn: "500 mg"
+    quantity = Column(String) # YENİ: Örn: "1 tablet", "2 kaşık"
+    times = Column(String) # Örn: "08:00, 20:00"
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="meds")
