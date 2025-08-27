@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Özellikler Dahil - Sağlamlaştırılmış Hali)
+# backend/main.py (Tüm Özellikler Dahil - Tam ve Kısaltılmamış Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -146,26 +146,18 @@ async def get_medication_info(med_name: str, current_user: models.User = Depends
         request_options = {"timeout": 60}
         response = model.generate_content(prompt, request_options=request_options)
         
-        # --- YENİ VE SAĞLAMLAŞTIRILMIŞ HATA KONTROLÜ ---
         try:
-            # Önce cevabın kendisinin var olup olmadığını kontrol et
             if response and response.text:
                 return {"info": response.text.strip()}
-            
-            # Eğer .text yoksa ama prompt_feedback varsa (güvenlik bloğu), bunu logla
             elif response and response.prompt_feedback:
                 print(f"--- UYARI: /medication-info için modelden güvenlik bloğu yanıtı alındı ---")
                 print(f"Block Sebebi: {response.prompt_feedback}")
                 raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (güvenlik filtresi).")
-            
-            # Diğer tüm beklenmedik durumlar için
             else:
                 print(f"--- UYARI: /medication-info için modelden tamamen boş veya beklenmedik yanıt alındı ---")
                 print(f"Response Detayı: {response}")
                 raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (boş yanıt).")
-
         except Exception as inner_e:
-            # response.text erişimi sırasında oluşabilecek hataları yakala
             print(f"--- HATA: Yanıt işlenirken sorun oluştu ---")
             print(f"Hata Detayı: {inner_e}")
             print(f"Response Nesnesi: {response}")
