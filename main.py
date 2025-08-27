@@ -1,4 +1,4 @@
-# backend/main.py (İlaç Yönetimi Fonksiyonları Eklendi)
+# backend/main.py (Tüm Modüller Entegre Edildi - Tam Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -92,13 +92,8 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
     db.delete(report_to_delete); db.commit()
     return
 
-# --- YENİ: İLAÇ YÖNETİMİ ENDPOINT'LERİ ---
 @app.post("/medications/", response_model=schemas.Medication)
-def create_medication_for_user(
-    med: schemas.MedicationCreate, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user)
-):
+def create_medication_for_user(med: schemas.MedicationCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_med = models.Medication(**med.model_dump(), owner_id=current_user.id)
     db.add(db_med)
     db.commit()
@@ -106,23 +101,14 @@ def create_medication_for_user(
     return db_med
 
 @app.get("/medications/", response_model=list[schemas.Medication])
-def read_user_medications(
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user)
-):
+def read_user_medications(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
 
 @app.delete("/medications/{med_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_medication(
-    med_id: int, 
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user)
-):
+def delete_medication(med_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     med_to_delete = db.query(models.Medication).filter(models.Medication.id == med_id).first()
-    if not med_to_delete:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="İlaç bulunamadı.")
-    if med_to_delete.owner_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu ilacı silme yetkiniz yok.")
+    if not med_to_delete: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="İlaç bulunamadı.")
+    if med_to_delete.owner_id != current_user.id: raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu ilacı silme yetkiniz yok.")
     db.delete(med_to_delete)
     db.commit()
     return
@@ -164,6 +150,9 @@ async def analyze_report(
                 profile_info += f"- Yaş: {age}\n"
             if current_user.gender:
                 profile_info += f"- Cinsiyet: {current_user.gender}\n"
+            user_meds = db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
+            if user_meds:
+                profile_info += "- Kullandığı İlaçlar: " + ", ".join([med.name for med in user_meds]) + "\n"
             task_prompt += profile_info
         task_prompt += """
         \nÖNCELİK 1: GÜVENLİK KONTROLÜ: Raporun içeriği ile hastanın profili (yaş, cinsiyet) arasında bariz bir çelişki (örn: erkek için gebelik) varsa, raporu yorumlama. Sadece 'Yüklediğin rapor ile profil bilgilerin arasında bir tutarsızlık var gibi görünüyor, kontrol edebilir misin?' de.
@@ -196,7 +185,7 @@ async def analyze_report(
         raise HTTPException(status_code=500, detail=f"Yapay zeka ile iletişim sırasında bir hata oluştu: {str(e)}")
 
 @app.get("/health-tip/")
-async def get_health_tip(current_user: models.User = Depends(get_current_user)):
+async def get_health_tip(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
         profile_summary = "Kullanıcının profili:\n"
@@ -206,7 +195,11 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
             profile_summary += f"- Yaş: {age}\n"
         if current_user.gender: profile_summary += f"- Cinsiyet: {current_user.gender}\n"
         if current_user.chronic_diseases: profile_summary += f"- Bilinen Hastalıklar: {current_user.chronic_diseases}\n"
-        else: profile_summary += "- Bilinen bir kronik hastalığı yok.\n"
+        user_meds = db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
+        if user_meds:
+            profile_summary += "- Kullandığı İlaçlar: " + ", ".join([med.name for med in user_meds]) + "\n"
+        else:
+            profile_summary += "- Bilinen bir kronik hastalığı veya kullandığı ilaç yok.\n"
         prompt = f"""
         Senin adın Mia. Pozitif ve motive edici bir sağlık koçusun. Aşağıdaki profiline göre kullanıcıya özel, kısa (tek cümle), 
         uygulanabilir ve arkadaşça bir "günün sağlık tavsiyesi" oluştur. 
@@ -222,7 +215,8 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
 @app.post("/symptom-analyze/")
 async def analyze_symptoms(
     history_json: str = Form("[]"),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     profile_summary = "Kullanıcının bilinen sağlık geçmişi:\n"
     if current_user.date_of_birth:
@@ -233,13 +227,14 @@ async def analyze_symptoms(
         profile_summary += f"- Cinsiyet: {current_user.gender}\n"
     if current_user.chronic_diseases: 
         profile_summary += f"- Kronik Hastalıklar: {current_user.chronic_diseases}\n"
-    if current_user.medications:
-        profile_summary += f"- Kullandığı İlaçlar: {current_user.medications}\n"
+    user_meds = db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
+    if user_meds:
+        profile_summary += "- Kullandığı İlaçlar: " + ", ".join([f"{med.name} ({med.dosage})" for med in user_meds]) + "\n"
     
     system_instruction_text = f"""
     Senin adın Mia. Sen, Miacore Health platformunun, kullanıcının anlattığı belirtilere göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.
     Görevin, kullanıcının şikayetlerini ve aşağıda verilen sağlık geçmişini DİKKATE ALARAK onu en doğru tıbbi branşa yönlendirmektir.
-    Özellikle kronik hastalıkları (kalp, diyabet vb.) olan kullanıcıların belirtilerine daha hassas yaklaşmalısın.
+    Özellikle kronik hastalıkları (kalp, diyabet vb.) olan kullanıcıların belirtilerine ve kullandıkları ilaçların olası yan etkilerine daha hassas yaklaşmalısın.
     Gerekirse birkaç netleştirici soru sor ve sonunda "Bu belirtiler ve sağlık geçmişiniz göz önünde bulundurulduğunda, bir [Tıbbi Branş] uzmanına danışmanız faydalı olabilir." şeklinde net bir yönlendirme yap.
     ASLA teşhis koyma veya ilaç önerme. Tek görevin doğru branşa yönlendirmektir.
     
