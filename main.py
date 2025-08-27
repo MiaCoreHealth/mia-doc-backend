@@ -147,9 +147,8 @@ async def get_medication_info(med_name: str, current_user: models.User = Depends
         response = model.generate_content(prompt, request_options=request_options)
         
         # DEĞİŞİKLİK: Cevabı işlemeden önce varlığını kontrol ediyoruz
-        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-            info_text = "".join(part.text for part in response.candidates[0].content.parts)
-            return {"info": info_text.strip()}
+        if response.text:
+            return {"info": response.text.strip()}
         else:
             # Modelin cevabı engellediği veya boş döndüğü durum
             print(f"--- UYARI: /medication-info için modelden boş veya engellenmiş yanıt alındı ---")
