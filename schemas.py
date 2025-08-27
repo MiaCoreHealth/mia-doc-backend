@@ -5,7 +5,6 @@ from typing import Optional, List
 class MedicationBase(BaseModel):
     name: str
     dosage: str
-    # DEĞİŞİKLİK: 'frequency' yerine 'times' alanı eklendi
     times: str
     notes: Optional[str] = None
 
