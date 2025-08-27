@@ -33,12 +33,13 @@ class Report(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="reports")
 
+# DEĞİŞİKLİK: Tablo adını değiştirerek yeniden oluşturulmasını sağlıyoruz
 class Medication(Base):
-    __tablename__ = "medications"
+    __tablename__ = "medications_v2"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     dosage = Column(String)
-    times = Column(String) # Örn: "08:00, 20:00"
+    times = Column(String)
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="meds")
