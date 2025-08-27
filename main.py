@@ -1,9 +1,11 @@
-# backend/main.py (Yazım Hatası Düzeltilmiş Sürüm)
+# backend/main.py (Favicon Hatası Düzeltilmiş Sürüm)
 
 import os
 from datetime import date, datetime, timezone
 import json
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
+# YENİ: Response importu eklendi
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -42,7 +44,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None: raise credentials_exception
     return user
 
-# --- API Endpoints (Değişiklik Yok) ---
+# --- API Endpoints ---
+
+# YENİ: Favicon 404 hatalarını önlemek için
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+@app.get('/favicon.png', include_in_schema=False)
+async def favicon_png():
+    return Response(status_code=204)
+
 @app.post("/register/")
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
@@ -124,8 +136,6 @@ async def analyze_report(
         """
         new_content.append(task_prompt)
         contents = await file.read()
-        # --- HATA DÜZELTMESİ BURADA ---
-        # io.io.BytesIO yerine io.BytesIO kullanıldı
         img = Image.open(io.BytesIO(contents))
         new_content.append(img)
 
@@ -173,4 +183,3 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
         return {"tip": response.text.strip()}
     except Exception as e:
         return {"tip": "Bugün kendine iyi bakmayı unutma, bol su içmek harika bir başlangıç olabilir!"}
-
