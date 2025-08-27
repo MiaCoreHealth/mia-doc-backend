@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Özellikler Dahil - Tam Hali)
+# backend/main.py (İlaç Bilgisi Fonksiyonuna Hata Ayıklama Eklendi)
 
 import os
 from datetime import date, datetime, timezone
@@ -146,7 +146,11 @@ async def get_medication_info(med_name: str, current_user: models.User = Depends
         response = model.generate_content(prompt)
         return {"info": response.text.strip()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir hata oluştu: {str(e)}")
+        # DEĞİŞİKLİK: Detaylı hata loglaması eklendi
+        print(f"--- HATA: /medication-info endpoint'inde sorun oluştu ---")
+        print(f"Hata Detayı: {e}")
+        print(f"--- HATA SONU ---")
+        raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir hata oluştu.")
 
 @app.post("/report/analyze/")
 async def analyze_report(
