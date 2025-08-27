@@ -1,4 +1,4 @@
-# backend/main.py (Mia'nın Sıcakkanlı Kişiliği)
+# backend/main.py (Yazım Hatası Düzeltilmiş Sürüm)
 
 import os
 from datetime import date, datetime, timezone
@@ -89,7 +89,6 @@ async def analyze_report(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # --- YENİ KİŞİLİK TANIMI ---
     system_instruction_text = """
     Senin adın Mia. Sen, Miacore Health platformunun sıcakkanlı, arkadaş canlısı ve destekleyici sağlık asistanısın.
     Kullanıcılarla konuşurken empatik, basit ve anlaşılır bir dil kullan. Amacın, onları sağlıkları konusunda bilgilendirirken aynı zamanda motive etmek ve kendilerini rahat hissetmelerini sağlamak.
@@ -125,6 +124,8 @@ async def analyze_report(
         """
         new_content.append(task_prompt)
         contents = await file.read()
+        # --- HATA DÜZELTMESİ BURADA ---
+        # io.io.BytesIO yerine io.BytesIO kullanıldı
         img = Image.open(io.BytesIO(contents))
         new_content.append(img)
 
@@ -161,7 +162,6 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
         if current_user.gender: profile_summary += f"- Cinsiyet: {current_user.gender}\n"
         if current_user.chronic_diseases: profile_summary += f"- Bilinen Hastalıklar: {current_user.chronic_diseases}\n"
         else: profile_summary += "- Bilinen bir kronik hastalığı yok.\n"
-        # YENİ KİŞİLİĞE UYGUN PROMPT
         prompt = f"""
         Senin adın Mia. Pozitif ve motive edici bir sağlık koçusun. Aşağıdaki profiline göre kullanıcıya özel, kısa (tek cümle), 
         uygulanabilir ve arkadaşça bir "günün sağlık tavsiyesi" oluştur. 
@@ -173,3 +173,4 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
         return {"tip": response.text.strip()}
     except Exception as e:
         return {"tip": "Bugün kendine iyi bakmayı unutma, bol su içmek harika bir başlangıç olabilir!"}
+
