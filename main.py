@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Özellikler Dahil - Tam ve Kısaltılmamış Hali)
+# backend/main.py (İlaç Düzenleme Fonksiyonu Eklendi - Tam Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -92,6 +92,7 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
     db.delete(report_to_delete); db.commit()
     return
 
+# --- İLAÇ YÖNETİMİ ENDPOINT'LERİ ---
 @app.post("/medications/", response_model=schemas.Medication)
 def create_medication_for_user(med: schemas.MedicationCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_med = models.Medication(**med.model_dump(), owner_id=current_user.id)
@@ -105,13 +106,22 @@ def read_user_medications(db: Session = Depends(get_db), current_user: models.Us
     return db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
 
 @app.put("/medications/{med_id}", response_model=schemas.Medication)
-def update_medication(med_id: int, med_update: schemas.MedicationUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def update_medication(
+    med_id: int, 
+    med_update: schemas.MedicationUpdate,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     db_med = db.query(models.Medication).filter(models.Medication.id == med_id).first()
-    if not db_med: raise HTTPException(status_code=404, detail="İlaç bulunamadı")
-    if db_med.owner_id != current_user.id: raise HTTPException(status_code=403, detail="Bu ilacı düzenleme yetkiniz yok")
+    if not db_med:
+        raise HTTPException(status_code=404, detail="İlaç bulunamadı")
+    if db_med.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bu ilacı düzenleme yetkiniz yok")
+    
     update_data = med_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_med, key, value)
+        
     db.add(db_med)
     db.commit()
     db.refresh(db_med)
