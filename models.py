@@ -1,42 +1,47 @@
-# backend/models.py
-
-import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Date, Float
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
-
-    # --- KAPSAMLI PROFİL ALANLARI ---
-    # Önceki alanlar
-    chronic_diseases = Column(Text, nullable=True)
-    medications = Column(Text, nullable=True)
-
-    # Yeni eklenen alanlar
-    date_of_birth = Column(Date, nullable=True)            # Doğum Tarihi
-    gender = Column(String, nullable=True)                 # Cinsiyet
-    height_cm = Column(Float, nullable=True)               # Boy (cm)
-    weight_kg = Column(Float, nullable=True)               # Kilo (kg)
-    pregnancy_status = Column(String, nullable=True)       # Hamilelik Durumu
-    smoking_status = Column(String, nullable=True)         # Sigara Kullanımı
-    alcohol_status = Column(String, nullable=True)         # Alkol Kullanımı
-    family_history = Column(Text, nullable=True)           # Aile Öyküsü
+    
+    # Profil Bilgileri
+    date_of_birth = Column(Date, nullable=True)
+    gender = Column(String, nullable=True)
+    height_cm = Column(Integer, nullable=True)
+    weight_kg = Column(Integer, nullable=True)
+    chronic_diseases = Column(String, nullable=True)
+    medications = Column(String, nullable=True) # Bu satırı daha sonra yeni sisteme taşıyacağız
+    family_history = Column(String, nullable=True)
+    smoking_status = Column(String, nullable=True)
+    alcohol_status = Column(String, nullable=True)
+    pregnancy_status = Column(String, nullable=True)
 
     reports = relationship("Report", back_populates="owner")
+    # YENİ: Kullanıcının ilaçları için ilişki
+    meds = relationship("Medication", back_populates="owner", cascade="all, delete-orphan")
 
 class Report(Base):
     __tablename__ = "reports"
-    # ... (Report sınıfı aynı kalıyor, değişiklik yok)
     id = Column(Integer, primary_key=True, index=True)
     original_filename = Column(String)
-    analysis_result = Column(Text)
+    analysis_result = Column(String)
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="reports")
+
+# YENİ: İlaçlar için veritabanı modeli
+class Medication(Base):
+    __tablename__ = "medications"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    dosage = Column(String) # Örn: "500 mg", "1 tablet"
+    frequency = Column(String) # Örn: "Günde 2 kez", "Sabahları"
+    notes = Column(String, nullable=True) # Örn: "Tok karnına"
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner = relationship("User", back_populates="meds")

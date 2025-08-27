@@ -1,56 +1,64 @@
-# backend/schemas.py
-
-import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from datetime import date, datetime
 from typing import Optional, List
 
-# Sohbet mesajlarını temsil eden model
-class ChatMessage(BaseModel):
-    sender: str
-    text: str
+# YENİ: İlaç şemaları
+class MedicationBase(BaseModel):
+    name: str
+    dosage: str
+    frequency: str
+    notes: Optional[str] = None
 
-# Frontend'den gelecek olan konuşma isteğini temsil eden model
-class ConversationRequest(BaseModel):
-    question: Optional[str] = None
-    history: List[ChatMessage] = []
+class MedicationCreate(MedicationBase):
+    pass
 
-class ProfileUpdate(BaseModel):
-    chronic_diseases: Optional[str] = None
-    medications: Optional[str] = None
-    date_of_birth: Optional[datetime.date] = None
-    gender: Optional[str] = None
-    height_cm: Optional[float] = None
-    weight_kg: Optional[float] = None
-    pregnancy_status: Optional[str] = None
-    smoking_status: Optional[str] = None
-    alcohol_status: Optional[str] = None
-    family_history: Optional[str] = None
-
-class User(BaseModel):
+class Medication(MedicationBase):
     id: int
-    email: str
-    chronic_diseases: Optional[str] = None
-    medications: Optional[str] = None
-    date_of_birth: Optional[datetime.date] = None
-    gender: Optional[str] = None
-    height_cm: Optional[float] = None
-    weight_kg: Optional[float] = None
-    pregnancy_status: Optional[str] = None
-    smoking_status: Optional[str] = None
-    alcohol_status: Optional[str] = None
-    family_history: Optional[str] = None
+    owner_id: int
 
     class Config:
         from_attributes = True
 
-class Report(BaseModel):
-    id: int
+# Mevcut Rapor şemaları
+class ReportBase(BaseModel):
     original_filename: str
     analysis_result: str
-    upload_date: datetime.datetime
+
+class ReportCreate(ReportBase):
+    pass
+
+class Report(ReportBase):
+    id: int
+    upload_date: datetime
+    owner_id: int
+
     class Config:
         from_attributes = True
 
-class UserCreate(BaseModel):
+# Mevcut Profil ve Kullanıcı şemaları
+class ProfileUpdate(BaseModel):
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
+    weight_kg: Optional[int] = None
+    chronic_diseases: Optional[str] = None
+    medications: Optional[str] = None
+    family_history: Optional[str] = None
+    smoking_status: Optional[str] = None
+    alcohol_status: Optional[str] = None
+    pregnancy_status: Optional[str] = None
+
+class UserBase(BaseModel):
     email: str
+
+class UserCreate(UserBase):
     password: str
+
+class User(UserBase, ProfileUpdate):
+    id: int
+    is_active: bool
+    reports: List[Report] = []
+    meds: List[Medication] = [] # YENİ: Kullanıcının ilaç listesi
+
+    class Config:
+        from_attributes = True

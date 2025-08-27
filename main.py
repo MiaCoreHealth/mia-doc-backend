@@ -1,4 +1,4 @@
-# backend/main.py (Tam ve Kısaltılmamış Son Sürüm)
+# backend/main.py (İlaç Yönetimi Fonksiyonları Eklendi)
 
 import os
 from datetime import date, datetime, timezone
@@ -90,6 +90,41 @@ def delete_report(report_id: int, current_user: models.User = Depends(get_curren
     if not report_to_delete: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rapor bulunamadı.")
     if report_to_delete.owner_id != current_user.id: raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu raporu silme yetkiniz yok.")
     db.delete(report_to_delete); db.commit()
+    return
+
+# --- YENİ: İLAÇ YÖNETİMİ ENDPOINT'LERİ ---
+@app.post("/medications/", response_model=schemas.Medication)
+def create_medication_for_user(
+    med: schemas.MedicationCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    db_med = models.Medication(**med.model_dump(), owner_id=current_user.id)
+    db.add(db_med)
+    db.commit()
+    db.refresh(db_med)
+    return db_med
+
+@app.get("/medications/", response_model=list[schemas.Medication])
+def read_user_medications(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    return db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
+
+@app.delete("/medications/{med_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_medication(
+    med_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    med_to_delete = db.query(models.Medication).filter(models.Medication.id == med_id).first()
+    if not med_to_delete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="İlaç bulunamadı.")
+    if med_to_delete.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu ilacı silme yetkiniz yok.")
+    db.delete(med_to_delete)
+    db.commit()
     return
 
 @app.post("/report/analyze/")
