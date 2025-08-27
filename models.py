@@ -38,7 +38,6 @@ class Medication(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     dosage = Column(String)
-    # DEĞİŞİKLİK: 'frequency' yerine 'times' (saatler) alanı eklendi
     times = Column(String) # Örn: "08:00, 20:00"
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
