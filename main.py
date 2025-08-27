@@ -189,12 +189,26 @@ async def analyze_symptoms(
     history_json: str = Form("[]"),
     current_user: models.User = Depends(get_current_user)
 ):
-    system_instruction_text = """
+    profile_summary = "Kullanıcının bilinen sağlık geçmişi:\n"
+    if current_user.date_of_birth:
+        today = date.today()
+        age = today.year - current_user.date_of_birth.year - ((today.month, today.day) < (current_user.date_of_birth.month, current_user.date_of_birth.day))
+        profile_summary += f"- Yaş: {age}\n"
+    if current_user.gender: 
+        profile_summary += f"- Cinsiyet: {current_user.gender}\n"
+    if current_user.chronic_diseases: 
+        profile_summary += f"- Kronik Hastalıklar: {current_user.chronic_diseases}\n"
+    if current_user.medications:
+        profile_summary += f"- Kullandığı İlaçlar: {current_user.medications}\n"
+    
+    system_instruction_text = f"""
     Senin adın Mia. Sen, Miacore Health platformunun, kullanıcının anlattığı belirtilere göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.
-    Görevin, kullanıcının şikayetlerini dinlemek, gerekirse birkaç netleştirici soru sormak ve sonunda "Bu belirtiler genellikle bir [Tıbbi Branş] uzmanının alanına girer." şeklinde net bir yönlendirme yapmaktır.
-    Örneğin: "Kardiyoloji", "Nöroloji", "Gastroenteroloji", "Dahiliye (İç Hastalıkları)".
+    Görevin, kullanıcının şikayetlerini ve aşağıda verilen sağlık geçmişini DİKKATE ALARAK onu en doğru tıbbi branşa yönlendirmektir.
+    Özellikle kronik hastalıkları (kalp, diyabet vb.) olan kullanıcıların belirtilerine daha hassas yaklaşmalısın.
+    Gerekirse birkaç netleştirici soru sor ve sonunda "Bu belirtiler ve sağlık geçmişiniz göz önünde bulundurulduğunda, bir [Tıbbi Branş] uzmanına danışmanız faydalı olabilir." şeklinde net bir yönlendirme yap.
     ASLA teşhis koyma veya ilaç önerme. Tek görevin doğru branşa yönlendirmektir.
-    Konu dışı sorulara cevap verme ve her zaman nazik, empatik ve profesyonel ol.
+    
+    {profile_summary}
     """
     model = genai.GenerativeModel('gemini-1.5-flash-latest', system_instruction=system_instruction_text)
     
