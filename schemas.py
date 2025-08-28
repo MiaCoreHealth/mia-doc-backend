@@ -2,10 +2,25 @@ from pydantic import BaseModel
 from datetime import date, datetime
 from typing import Optional, List
 
+# YENİ: Kilo takibi şemaları
+class WeightEntryBase(BaseModel):
+    weight_kg: float
+
+class WeightEntryCreate(WeightEntryBase):
+    pass
+
+class WeightEntry(WeightEntryBase):
+    id: int
+    entry_date: datetime
+    owner_id: int
+
+    class Config:
+        from_attributes = True
+
 class MedicationBase(BaseModel):
     name: str
     dosage: str
-    quantity: str # YENİ
+    quantity: str
     times: str
     notes: Optional[str] = None
 
@@ -60,6 +75,7 @@ class User(UserBase, ProfileUpdate):
     is_active: bool
     reports: List[Report] = []
     meds: List[Medication] = []
+    weight_entries: List[WeightEntry] = [] # YENİ: Kullanıcının kilo geçmişi
 
     class Config:
         from_attributes = True

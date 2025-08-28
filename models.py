@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, DateTime, Boolean, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -23,6 +23,8 @@ class User(Base):
 
     reports = relationship("Report", back_populates="owner")
     meds = relationship("Medication", back_populates="owner", cascade="all, delete-orphan")
+    # YENİ: Kullanıcının kilo geçmişi için ilişki
+    weight_entries = relationship("WeightEntry", back_populates="owner", cascade="all, delete-orphan")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -34,12 +36,21 @@ class Report(Base):
     owner = relationship("User", back_populates="reports")
 
 class Medication(Base):
-    __tablename__ = "medications_v3" # Veritabanı şema değişikliği için tablo adını güncelliyoruz
+    __tablename__ = "medications_v3"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    dosage = Column(String) # Örn: "500 mg"
-    quantity = Column(String) # YENİ: Örn: "1 tablet", "2 kaşık"
-    times = Column(String) # Örn: "08:00, 20:00"
+    dosage = Column(String)
+    quantity = Column(String)
+    times = Column(String)
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="meds")
+
+# YENİ: Kilo takibi için veritabanı modeli
+class WeightEntry(Base):
+    __tablename__ = "weight_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    weight_kg = Column(Float, nullable=False)
+    entry_date = Column(DateTime(timezone=True), server_default=func.now())
+    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner = relationship("User", back_populates="weight_entries")

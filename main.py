@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Özellikler Dahil - Sağlamlaştırılmış Hali)
+# backend/main.py (Tüm Özellikler Dahil - Tam Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -126,9 +126,27 @@ def delete_medication(med_id: int, db: Session = Depends(get_db), current_user: 
     db.commit()
     return
 
+@app.post("/weight-entries/", response_model=schemas.WeightEntry)
+def create_weight_entry_for_user(
+    entry: schemas.WeightEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_entry = models.WeightEntry(**entry.model_dump(), owner_id=current_user.id)
+    db.add(db_entry)
+    db.commit()
+    db.refresh(db_entry)
+    return db_entry
+
+@app.get("/weight-entries/", response_model=list[schemas.WeightEntry])
+def read_user_weight_entries(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return db.query(models.WeightEntry).filter(models.WeightEntry.owner_id == current_user.id).order_by(models.WeightEntry.entry_date).all()
+
 # --- YAPAY ZEKA FONKSİYONLARI ---
 
-# DEĞİŞİKLİK: Fonksiyon 'async def' yerine 'def' olarak değiştirildi
 @app.get("/medication-info/{med_name}")
 def get_medication_info(med_name: str, current_user: models.User = Depends(get_current_user)):
     try:
@@ -150,14 +168,10 @@ def get_medication_info(med_name: str, current_user: models.User = Depends(get_c
         if hasattr(response, 'text'):
             return {"info": response.text.strip()}
         else:
-            print(f"--- UYARI: /medication-info için modelden beklenmedik yanıt alındı ---")
-            print(f"Response Detayı: {response}")
             raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (modelden boş yanıt).")
         
     except Exception as e:
-        print(f"--- HATA: /medication-info endpoint'inde genel sorun oluştu ---")
-        print(f"Hata Detayı: {e}")
-        raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir sunucu hatası oluştu.")
+        raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir sunucu hatası oluştu: {str(e)}")
 
 
 @app.post("/report/analyze/")
