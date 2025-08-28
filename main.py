@@ -127,11 +127,7 @@ def delete_medication(med_id: int, db: Session = Depends(get_db), current_user: 
     return
 
 @app.post("/weight-entries/", response_model=schemas.WeightEntry)
-def create_weight_entry_for_user(
-    entry: schemas.WeightEntryCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
+def create_weight_entry_for_user(entry: schemas.WeightEntryCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_entry = models.WeightEntry(**entry.model_dump(), owner_id=current_user.id)
     db.add(db_entry)
     db.commit()
@@ -139,11 +135,23 @@ def create_weight_entry_for_user(
     return db_entry
 
 @app.get("/weight-entries/", response_model=list[schemas.WeightEntry])
-def read_user_weight_entries(
+def read_user_weight_entries(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return db.query(models.WeightEntry).filter(models.WeightEntry.owner_id == current_user.id).order_by(models.WeightEntry.entry_date).all()
+
+@app.delete("/weight-entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_weight_entry(
+    entry_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    return db.query(models.WeightEntry).filter(models.WeightEntry.owner_id == current_user.id).order_by(models.WeightEntry.entry_date).all()
+    entry_to_delete = db.query(models.WeightEntry).filter(models.WeightEntry.id == entry_id).first()
+    if not entry_to_delete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kilo kaydı bulunamadı.")
+    if entry_to_delete.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kaydı silme yetkiniz yok.")
+    db.delete(entry_to_delete)
+    db.commit()
+    return
 
 # --- YAPAY ZEKA FONKSİYONLARI ---
 
