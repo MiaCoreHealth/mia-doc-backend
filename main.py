@@ -130,50 +130,45 @@ def delete_medication(med_id: int, db: Session = Depends(get_db), current_user: 
 
 @app.get("/medication-info/{med_name}")
 async def get_medication_info(med_name: str, current_user: models.User = Depends(get_current_user)):
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    prompt = f"""
+    Sen, bir hastaya ilaçlar hakkında bilgi veren, basit ve anlaşılır bir dil kullanan bir eczacı asistanısın.
+    Aşağıdaki ilaç hakkında, bir hastanın anlayacağı şekilde kısa bir özet sun: "{med_name}"
+
+    Cevabın şu 3 bölümü içermeli ve her bölümün başlığını kalın (markdown: **) yapmalısın:
+    1.  **Ne İçin Kullanılır?:** İlacın ana kullanım amacı.
+    2.  **Yaygın Yan Etkileri:** En sık görülen 2-3 yan etki.
+    3.  **Önemli Not:** Hastanın bu ilacı kullanırken bilmesi gereken en önemli tek şey.
+
+    Cevabın kısa, net ve sadece bilgilendirme amaçlı olsun. Tıbbi tavsiye verme.
+    """
+    
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        prompt = f"""
-        Sen, bir hastaya ilaçlar hakkında bilgi veren, basit ve anlaşılır bir dil kullanan bir eczacı asistanısın.
-        Aşağıdaki ilaç hakkında, bir hastanın anlayacağı şekilde kısa bir özet sun: "{med_name}"
-
-        Cevabın şu 3 bölümü içermeli ve her bölümün başlığını kalın (markdown: **) yapmalısın:
-        1.  **Ne İçin Kullanılır?:** İlacın ana kullanım amacı.
-        2.  **Yaygın Yan Etkileri:** En sık görülen 2-3 yan etki.
-        3.  **Önemli Not:** Hastanın bu ilacı kullanırken bilmesi gereken en önemli tek şey.
-
-        Cevabın kısa, net ve sadece bilgilendirme amaçlı olsun. Tıbbi tavsiye verme.
-        """
         request_options = {"timeout": 60}
         response = model.generate_content(prompt, request_options=request_options)
         
         # --- YENİ VE SAĞLAMLAŞTIRILMIŞ HATA KONTROLÜ ---
-        try:
-            # Önce cevabın kendisinin var olup olmadığını kontrol et
-            if response and hasattr(response, 'text'):
-                return {"info": response.text.strip()}
-            
-            # Eğer .text yoksa ama prompt_feedback varsa (güvenlik bloğu), bunu logla
-            elif response and hasattr(response, 'prompt_feedback'):
-                print(f"--- UYARI: /medication-info için modelden güvenlik bloğu yanıtı alındı ---")
-                print(f"Block Sebebi: {response.prompt_feedback}")
-                raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (güvenlik filtresi).")
-            
-            # Diğer tüm beklenmedik durumlar için
-            else:
-                print(f"--- UYARI: /medication-info için modelden tamamen boş veya beklenmedik yanıt alındı ---")
-                print(f"Response Detayı: {response}")
-                raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (boş yanıt).")
-
-        except Exception as inner_e:
-            # response.text erişimi sırasında oluşabilecek hataları yakala
-            print(f"--- HATA: Yanıt işlenirken sorun oluştu ---")
-            print(f"Hata Detayı: {inner_e}")
-            print(f"Response Nesnesi: {response}")
-            raise HTTPException(status_code=500, detail="Yapay zeka yanıtı işlenemedi.")
+        # Önce cevabın kendisinin var olup olmadığını ve .text özelliğine sahip olup olmadığını kontrol et
+        if hasattr(response, 'text'):
+            return {"info": response.text.strip()}
         
-    except Exception as outer_e:
+        # Eğer .text yoksa ama prompt_feedback varsa (güvenlik bloğu), bunu logla
+        elif hasattr(response, 'prompt_feedback'):
+            print(f"--- UYARI: /medication-info için modelden güvenlik bloğu yanıtı alındı ---")
+            print(f"Block Sebebi: {response.prompt_feedback}")
+            raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (güvenlik filtresi).")
+        
+        # Diğer tüm beklenmedik durumlar için
+        else:
+            print(f"--- UYARI: /medication-info için modelden tamamen boş veya beklenmedik yanıt alındı ---")
+            print(f"Response Detayı: {response}")
+            raise HTTPException(status_code=500, detail="İlaç bilgisi alınamadı (boş yanıt).")
+
+    except Exception as e:
+        # generate_content sırasında veya yukarıdaki bloklarda oluşabilecek tüm hataları yakala
         print(f"--- HATA: /medication-info endpoint'inde genel sorun oluştu ---")
-        print(f"Hata Detayı: {outer_e}")
+        print(f"Hata Tipi: {type(e)}")
+        print(f"Hata Detayı: {e}")
         raise HTTPException(status_code=500, detail=f"İlaç bilgisi alınırken bir sunucu hatası oluştu.")
 
 
