@@ -1,22 +1,10 @@
+# backend/schemas.py (İlişki Adları Senkronize Edildi)
+
 from pydantic import BaseModel
-from datetime import date, datetime
-from typing import Optional, List
+from datetime import date
+from typing import Optional
 
-# YENİ: Kilo takibi şemaları
-class WeightEntryBase(BaseModel):
-    weight_kg: float
-
-class WeightEntryCreate(WeightEntryBase):
-    pass
-
-class WeightEntry(WeightEntryBase):
-    id: int
-    entry_date: datetime
-    owner_id: int
-
-    class Config:
-        from_attributes = True
-
+# --- İlaç Şemaları ---
 class MedicationBase(BaseModel):
     name: str
     dosage: str
@@ -27,55 +15,77 @@ class MedicationBase(BaseModel):
 class MedicationCreate(MedicationBase):
     pass
 
-class MedicationUpdate(MedicationBase):
-    pass
+class MedicationUpdate(BaseModel):
+    name: Optional[str] = None
+    dosage: Optional[str] = None
+    quantity: Optional[str] = None
+    times: Optional[str] = None
+    notes: Optional[str] = None
 
 class Medication(MedicationBase):
     id: int
     owner_id: int
-
     class Config:
         from_attributes = True
 
-class ReportBase(BaseModel):
-    original_filename: str
-    analysis_result: str
+# --- Kilo Takibi Şemaları ---
+class WeightEntryBase(BaseModel):
+    weight_kg: float
 
-class ReportCreate(ReportBase):
+class WeightEntryCreate(WeightEntryBase):
     pass
 
-class Report(ReportBase):
+class WeightEntry(WeightEntryBase):
     id: int
-    upload_date: datetime
     owner_id: int
-
+    date: date
     class Config:
         from_attributes = True
 
-class ProfileUpdate(BaseModel):
-    date_of_birth: Optional[date] = None
-    gender: Optional[str] = None
-    height_cm: Optional[int] = None
-    weight_kg: Optional[int] = None
-    chronic_diseases: Optional[str] = None
-    medications: Optional[str] = None
-    family_history: Optional[str] = None
-    smoking_status: Optional[str] = None
-    alcohol_status: Optional[str] = None
-    pregnancy_status: Optional[str] = None
+# --- Rapor Şemaları ---
+class Report(BaseModel):
+    id: int
+    original_filename: str
+    analysis_result: str
+    upload_date: date
+    class Config:
+        from_attributes = True
 
+# --- Kullanıcı Şemaları ---
 class UserBase(BaseModel):
     email: str
 
 class UserCreate(UserBase):
     password: str
 
-class User(UserBase, ProfileUpdate):
+class ProfileUpdate(BaseModel):
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
+    weight_kg: Optional[float] = None
+    chronic_diseases: Optional[str] = None
+    family_history: Optional[str] = None
+    smoking_status: Optional[str] = None
+    alcohol_status: Optional[str] = None
+    pregnancy_status: Optional[str] = None
+
+class User(UserBase):
     id: int
     is_active: bool
-    reports: List[Report] = []
-    meds: List[Medication] = []
-    weight_entries: List[WeightEntry] = [] # YENİ: Kullanıcının kilo geçmişi
+    date_of_birth: Optional[date] = None
+    gender: Optional[str] = None
+    height_cm: Optional[int] = None
+    weight_kg: Optional[float] = None
+    chronic_diseases: Optional[str] = None
+    family_history: Optional[str] = None
+    smoking_status: Optional[str] = None
+    alcohol_status: Optional[str] = None
+    pregnancy_status: Optional[str] = None
+    reports: list[Report] = []
+    
+    # DÜZELTME: Bu alan adları artık models.py ile tam olarak aynı
+    medications_v2: list[Medication] = []
+    weight_entries_v2: list[WeightEntry] = []
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-# backend/main.py (Gelişmiş Yapay Zeka Mantığı - v2)
+# backend/main.py (İlişki Adları Senkronize Edildi)
 
 import os
 from datetime import date, datetime, timezone
@@ -159,8 +159,8 @@ def read_user_weight_entries(db: Session = Depends(get_db), current_user: models
 @app.delete("/weight-entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_weight_entry(entry_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     entry_to_delete = db.query(models.WeightEntry).filter(models.WeightEntry.id == entry_id).first()
-    if not entry_to_delete: raise HTTPException(status_code=404, detail="Kilo kaydı bulunamadı.")
-    if entry_to_delete.owner_id != current_user.id: raise HTTPException(status_code=status.HTTP_403, detail="Bu kaydı silme yetkiniz yok.")
+    if not entry_to_delete: raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kilo kaydı bulunamadı.")
+    if entry_to_delete.owner_id != current_user.id: raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu kaydı silme yetkiniz yok.")
     db.delete(entry_to_delete)
     db.commit()
     return
@@ -222,7 +222,6 @@ async def analyze_report(
     if file:
         task_prompt = "Aşağıdaki tıbbi raporu, sana verdiğim genel kurallar ve hastanın profili çerçevesinde yorumla. Cevapların kısa, net ve aksiyon odaklı olsun.\n\n"
         
-        # Determine the greeting based on who the report is for
         if not for_someone_else:
             greeting = "Merhaba! Raporunu inceliyorum."
         else:
@@ -231,14 +230,8 @@ async def analyze_report(
         task_prompt += f"""
         YORUMLAMA SÜRECİ (Bu adımları kullanıcıya gösterme, sadece uygula):
         1. GÜVENLİK KONTROLÜ: Raporun içeriği (örn: uterus, prostat) hastanın cinsiyetiyle biyolojik olarak uyumlu mu? Uyumsuzsa, yorum yapma ve SADECE şu cevabı ver: 'Yüklediğin rapor ile profil bilgilerin arasında bir tutarsızlık var gibi görünüyor. Lütfen doğru raporu yüklediğinden emin ol.'
-
         2. RAPOR TÜRÜNÜ BELİRLE VE GİRİŞ YAP: Raporun türünü anla (örn: kan tahlili, ultrason) ve cevabına şu şekilde başla: "{greeting} Gördüğüm kadarıyla bu bir [Rapor Türü] sonucu."
-
-        3. AKILLI ANALİZ:
-           - Rapordaki anormal bulguları hastanın bilinen kronik hastalıklarıyla ilişkilendir.
-           - EĞER İLİŞKİ VARSA (örn: kronik böbrek hastasında kreatinin yüksekliği), bu durumu net bir şekilde belirt. Örnek: "Böbrek değerlerindeki bu yükselme, bilinen rahatsızlığınla ilişkili olabilir. Durumu netleştirmek için bir Dahiliye veya Nefroloji uzmanına görünmen önemli."
-           - EĞER İLİŞKİ YOKSA, bulguları uzun açıklamalar yapmadan özetle. Örnek: "Kan değerlerinde bazı noktalar normalin dışında görünüyor. Bu sonuçları doktorunla konuşman en doğrusu olacaktır."
-
+        3. AKILLI ANALİZ: Rapordaki anormal bulguları hastanın bilinen kronik hastalıklarıyla ilişkilendir. EĞER İLİŞKİ VARSA (örn: kronik böbrek hastasında kreatinin yüksekliği), bu durumu net bir şekilde belirt. EĞER İLİŞKİ YOKSA, bulguları uzun açıklamalar yapmadan özetle.
         4. ÖZETLE VE YÖNLENDİR: Yorumunun sonunda her zaman hangi branşa gidilmesi gerektiğini kısaca belirt.
         """
         
