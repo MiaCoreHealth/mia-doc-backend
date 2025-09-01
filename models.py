@@ -1,4 +1,4 @@
-# backend/models.py (Syntax Hatası Düzeltildi)
+# backend/models.py (Veritabanı İlişki Düzeltmesi)
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Date, Float, DateTime
 from sqlalchemy.orm import relationship
@@ -25,8 +25,9 @@ class User(Base):
     pregnancy_status = Column(String, nullable=True)
     
     reports = relationship("Report", back_populates="owner")
-    medications_v2 = relationship("Medication", back_populates="owner")
-    weight_entries_v2 = relationship("WeightEntry", back_populates="owner")
+    # DÜZELTME: İlişki adları basitleştirildi
+    medications = relationship("Medication", back_populates="owner")
+    weight_entries = relationship("WeightEntry", back_populates="owner")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -40,6 +41,7 @@ class Report(Base):
     owner = relationship("User", back_populates="reports")
 
 class Medication(Base):
+    # Tablo adını v2 olarak tutuyoruz ki yeni ve temiz bir tablo oluşsun
     __tablename__ = "medications_v2"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -50,9 +52,11 @@ class Medication(Base):
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    owner = relationship("User", back_populates="medications_v2")
+    # DÜZELTME: back_populates User modelindeki basitleştirilmiş adla eşleşiyor
+    owner = relationship("User", back_populates="medications")
 
 class WeightEntry(Base):
+    # Tablo adını v2 olarak tutuyoruz ki yeni ve temiz bir tablo oluşsun
     __tablename__ = "weight_entries_v2" 
 
     id = Column(Integer, primary_key=True, index=True)
@@ -60,6 +64,6 @@ class WeightEntry(Base):
     date = Column(Date, nullable=False, default=date.today)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    # DÜZELTME: Eksik olan ")" karakteri eklendi.
-    owner = relationship("User", back_populates="weight_entries_v2")
+    # DÜZELTME: back_populates User modelindeki basitleştirilmiş adla eşleşiyor
+    owner = relationship("User", back_populates="weight_entries")
 
