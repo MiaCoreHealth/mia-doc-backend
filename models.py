@@ -1,4 +1,4 @@
-# backend/models.py (Veritabanı İlişki Düzeltmesi)
+# backend/models.py (Kilo Takibi Tablosu Eklendi)
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Date, Float, DateTime
 from sqlalchemy.orm import relationship
@@ -25,8 +25,8 @@ class User(Base):
     pregnancy_status = Column(String, nullable=True)
     
     reports = relationship("Report", back_populates="owner")
-    # DÜZELTME: Sunucu hatasını gidermek için ilişki adları eski haline getirildi
     medications_v2 = relationship("Medication", back_populates="owner")
+    # YENİ: Kilo kayıtları için veritabanı ilişkisi
     weight_entries_v2 = relationship("WeightEntry", back_populates="owner")
 
 class Report(Base):
@@ -41,7 +41,6 @@ class Report(Base):
     owner = relationship("User", back_populates="reports")
 
 class Medication(Base):
-    # Tablo adını v2 olarak tutuyoruz ki yeni ve temiz bir tablo oluşsun
     __tablename__ = "medications_v2"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -52,11 +51,10 @@ class Medication(Base):
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    # DÜZELTME: back_populates User modelindeki eski adla eşleşiyor
     owner = relationship("User", back_populates="medications_v2")
 
+# YENİ: Kilo kayıtlarını saklamak için yeni veritabanı tablosu
 class WeightEntry(Base):
-    # Tablo adını v2 olarak tutuyoruz ki yeni ve temiz bir tablo oluşsun
     __tablename__ = "weight_entries_v2" 
 
     id = Column(Integer, primary_key=True, index=True)
@@ -64,6 +62,5 @@ class WeightEntry(Base):
     date = Column(Date, nullable=False, default=date.today)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    # DÜZELTME: back_populates User modelindeki eski adla eşleşiyor
     owner = relationship("User", back_populates="weight_entries_v2")
 

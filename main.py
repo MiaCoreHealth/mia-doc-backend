@@ -1,4 +1,4 @@
-# backend/main.py (İlişki Adları Senkronize Edildi)
+# backend/main.py (Tam ve Kısaltılmamış Son Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -179,9 +179,9 @@ def get_user_profile_summary(user: models.User, db: Session) -> str:
     if user.chronic_diseases: 
         summary += f"- Kronik Hastalıklar: {user.chronic_diseases}\n"
     
-    user_meds = db.query(models.Medication).filter(models.Medication.owner_id == user.id).all()
-    if user_meds:
-        summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user_meds]) + "\n"
+    # Bu fonksiyon artık models.py ile senkronize
+    if user.medications_v2:
+        summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user.medications_v2]) + "\n"
     
     return summary
 
