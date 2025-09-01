@@ -1,4 +1,4 @@
-# backend/main.py (Gelişmiş Yapay Zeka Mantığı - Tam Hali)
+# backend/main.py (Gelişmiş Yapay Zeka Mantığı - v2)
 
 import os
 from datetime import date, datetime, timezone
@@ -21,9 +21,6 @@ from database import engine, SessionLocal
 # --- Kurulum ve Yapılandırma ---
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=GOOGLE_API_KEY)
-# Veritabanı tablolarının oluşturulması
-# Bu satır, veritabanı şeması her değiştiğinde (yeni tablo/kolon eklendiğinde)
-# sunucunun yeniden başlatılmasıyla tabloların güncellenmesini sağlar.
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
@@ -150,7 +147,6 @@ def create_weight_entry_for_user(entry: schemas.WeightEntryCreate, db: Session =
     db.commit()
     return db_entry
 
-# DÜZELTME: Kilo geçmişi hatasını gidermek için try-except bloğu eklendi
 @app.get("/weight-entries/", response_model=list[schemas.WeightEntry])
 def read_user_weight_entries(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     try:
@@ -164,7 +160,7 @@ def read_user_weight_entries(db: Session = Depends(get_db), current_user: models
 def delete_weight_entry(entry_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     entry_to_delete = db.query(models.WeightEntry).filter(models.WeightEntry.id == entry_id).first()
     if not entry_to_delete: raise HTTPException(status_code=404, detail="Kilo kaydı bulunamadı.")
-    if entry_to_delete.owner_id != current_user.id: raise HTTPException(status_code=403, detail="Bu kaydı silme yetkiniz yok.")
+    if entry_to_delete.owner_id != current_user.id: raise HTTPException(status_code=status.HTTP_403, detail="Bu kaydı silme yetkiniz yok.")
     db.delete(entry_to_delete)
     db.commit()
     return
@@ -204,9 +200,9 @@ async def analyze_report(
     Görevin, sana verilen tıbbi raporları ve soruları, hastanın profil bilgilerini dikkate alarak yorumlamaktır.
     
     EN ÖNEMLİ KURALLAR:
-    1. GÖREV SINIRI: Sadece sağlıkla ilgili konulara cevap ver. Konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında kalıyor, ben bir sağlık asistanıyım ve sana en iyi sağlık konularında yardımcı olabilirim." de.
+    1. GÖREV SINIRI: Sadece sağlıkla ilgili konulara cevap ver. Konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında kalıyor, sana en iyi sağlık konularında yardımcı olabilirim." de.
     2. DİL VE ÜSLUP: Cevapların her zaman basit, sade ve anlaşılır olsun. Tıbbi jargondan kaçın. Bulguları bir doktorun hastasına anlatır gibi özetle.
-    3. YASAL UYARI: Her cevabının sonunda MUTLAKA "Unutma, bu yorumlar tıbbi bir tavsiye niteliği taşımaz. Sağlığınla ilgili tüm kararlar için lütfen doktoruna danış." uyarısını ekle.
+    3. YASAL UYARI: Her cevabının sonunda MUTLAKA "Unutma, bu yorumlar tıbbi tavsiye yerine geçmez. Lütfen doktoruna danış." uyarısını ekle.
     4. KESİNLİKLE YAPMA: Asla net bir teşhis koyma. Asla ilaç veya tedavi önerme.
     """
     model = genai.GenerativeModel('gemini-1.5-flash-latest', system_instruction=system_instruction_text)
@@ -223,18 +219,35 @@ async def analyze_report(
     
     new_content = []
     
-    # DÜZELTME: Yapay zekanın iç konuşmalarını kullanıcıya göstermemesi için talimatlar güncellendi.
     if file:
-        task_prompt = "Aşağıdaki tıbbi raporu, sana verdiğim genel kurallar ve hastanın profili çerçevesinde yorumla.\n"
-        task_prompt += "Yorumlarına başlamadan önce, arka planda SESSİZCE şu güvenlik kontrolünü yap: Raporun içeriği (örn: uterus, prostat gibi organlar) hastanın cinsiyetiyle biyolojik olarak uyumlu mu? Eğer bariz bir uyumsuzluk varsa, yorum yapmayı durdur ve sadece şu metni cevap olarak ver: 'Yüklediğin rapor ile profil bilgilerin arasında bir tutarsızlık var gibi görünüyor. Lütfen doğru raporu yüklediğinden emin ol.'\n"
-        task_prompt += "Eğer bir uyumsuzluk yoksa, analize geç. Yorumlarını yaparken hastanın profil bilgilerini doğal bir şekilde kullan. Örneğin, 'Hipertansiyonunuz olduğunu görüyorum' demek yerine, 'Sağlık geçmişin göz önünde bulundurulduğunda...' gibi daha sade bir dil kullan.\n"
+        task_prompt = "Aşağıdaki tıbbi raporu, sana verdiğim genel kurallar ve hastanın profili çerçevesinde yorumla. Cevapların kısa, net ve aksiyon odaklı olsun.\n\n"
+        
+        # Determine the greeting based on who the report is for
+        if not for_someone_else:
+            greeting = "Merhaba! Raporunu inceliyorum."
+        else:
+            greeting = "Merhaba! Gönderdiğin raporu inceliyorum."
+
+        task_prompt += f"""
+        YORUMLAMA SÜRECİ (Bu adımları kullanıcıya gösterme, sadece uygula):
+        1. GÜVENLİK KONTROLÜ: Raporun içeriği (örn: uterus, prostat) hastanın cinsiyetiyle biyolojik olarak uyumlu mu? Uyumsuzsa, yorum yapma ve SADECE şu cevabı ver: 'Yüklediğin rapor ile profil bilgilerin arasında bir tutarsızlık var gibi görünüyor. Lütfen doğru raporu yüklediğinden emin ol.'
+
+        2. RAPOR TÜRÜNÜ BELİRLE VE GİRİŞ YAP: Raporun türünü anla (örn: kan tahlili, ultrason) ve cevabına şu şekilde başla: "{greeting} Gördüğüm kadarıyla bu bir [Rapor Türü] sonucu."
+
+        3. AKILLI ANALİZ:
+           - Rapordaki anormal bulguları hastanın bilinen kronik hastalıklarıyla ilişkilendir.
+           - EĞER İLİŞKİ VARSA (örn: kronik böbrek hastasında kreatinin yüksekliği), bu durumu net bir şekilde belirt. Örnek: "Böbrek değerlerindeki bu yükselme, bilinen rahatsızlığınla ilişkili olabilir. Durumu netleştirmek için bir Dahiliye veya Nefroloji uzmanına görünmen önemli."
+           - EĞER İLİŞKİ YOKSA, bulguları uzun açıklamalar yapmadan özetle. Örnek: "Kan değerlerinde bazı noktalar normalin dışında görünüyor. Bu sonuçları doktorunla konuşman en doğrusu olacaktır."
+
+        4. ÖZETLE VE YÖNLENDİR: Yorumunun sonunda her zaman hangi branşa gidilmesi gerektiğini kısaca belirt.
+        """
         
         if not for_someone_else:
             profile_summary = get_user_profile_summary(current_user, db)
-            task_prompt += profile_summary
+            task_prompt += "\n" + profile_summary
         
         task_prompt += "\nİşte yorumlaman gereken rapor:"
-        
+
         new_content.append(task_prompt)
         contents = await file.read()
         img = Image.open(io.BytesIO(contents))
@@ -285,7 +298,6 @@ async def analyze_symptoms(
 ):
     profile_summary = get_user_profile_summary(current_user, db)
     
-    # DÜZELTME: Yapay zeka üslubu güncellendi
     system_instruction_text = f"""
     Senin adın Mia. Sen, kullanıcının anlattığı belirtilere ve sağlık geçmişine göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.
     
