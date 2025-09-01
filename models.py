@@ -1,4 +1,4 @@
-# backend/models.py (Kilo Takibi Tablosu Eklendi)
+# backend/models.py (Veritabanı Tablo Düzeltmesi v3)
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Date, Float, DateTime
 from sqlalchemy.orm import relationship
@@ -25,9 +25,9 @@ class User(Base):
     pregnancy_status = Column(String, nullable=True)
     
     reports = relationship("Report", back_populates="owner")
-    medications_v2 = relationship("Medication", back_populates="owner")
-    # YENİ: Kilo kayıtları için veritabanı ilişkisi
-    weight_entries_v2 = relationship("WeightEntry", back_populates="owner")
+    # DÜZELTME: Sunucu hatasını gidermek için ilişki adları güncellendi
+    medications_v3 = relationship("Medication", back_populates="owner")
+    weight_entries_v3 = relationship("WeightEntry", back_populates="owner")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -41,7 +41,8 @@ class Report(Base):
     owner = relationship("User", back_populates="reports")
 
 class Medication(Base):
-    __tablename__ = "medications_v2"
+    # DÜZELTME: Tablo adı v3 olarak güncellendi
+    __tablename__ = "medications_v3"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
@@ -51,16 +52,16 @@ class Medication(Base):
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    owner = relationship("User", back_populates="medications_v2")
+    owner = relationship("User", back_populates="medications_v3")
 
-# YENİ: Kilo kayıtlarını saklamak için yeni veritabanı tablosu
 class WeightEntry(Base):
-    __tablename__ = "weight_entries_v2" 
+    # DÜZELTME: Tablo adı v3 olarak güncellendi
+    __tablename__ = "weight_entries_v3" 
 
     id = Column(Integer, primary_key=True, index=True)
     weight_kg = Column(Float, nullable=False)
     date = Column(Date, nullable=False, default=date.today)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    owner = relationship("User", back_populates="weight_entries_v2")
+    owner = relationship("User", back_populates="weight_entries_v3")
 
