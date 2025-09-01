@@ -1,4 +1,4 @@
-# backend/models.py (Veritabanı Tablo Düzeltmesi)
+# backend/models.py (Syntax Hatası Düzeltildi)
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Date, Float, DateTime
 from sqlalchemy.orm import relationship
@@ -26,8 +26,7 @@ class User(Base):
     
     reports = relationship("Report", back_populates="owner")
     medications_v2 = relationship("Medication", back_populates="owner")
-    # YENİ: İlişki adı daha temiz bir hale getirildi
-    weight_entries = relationship("WeightEntry", back_populates="owner") 
+    weight_entries_v2 = relationship("WeightEntry", back_populates="owner")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -41,13 +40,13 @@ class Report(Base):
     owner = relationship("User", back_populates="reports")
 
 class Medication(Base):
-    __tablename__ = "medications_v2" 
+    __tablename__ = "medications_v2"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
     dosage = Column(String)
-    quantity = Column(String) 
-    times = Column(String) 
+    quantity = Column(String)
+    times = Column(String)
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
@@ -61,6 +60,6 @@ class WeightEntry(Base):
     date = Column(Date, nullable=False, default=date.today)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    # YENİ: back_populates User modelindeki yeni ilişki adıyla eşleşecek şekilde güncellendi
-    owner = relationship("User", back_populates
+    # DÜZELTME: Eksik olan ")" karakteri eklendi.
+    owner = relationship("User", back_populates="weight_entries_v2")
 
