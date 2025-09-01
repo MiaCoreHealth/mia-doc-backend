@@ -1,4 +1,4 @@
-# backend/main.py (Tam ve Kısaltılmamış Son Hali)
+# backend/main.py (Eager Loading ile Güçlendirilmiş Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -7,7 +7,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, F
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload # joinedload eklendi
 from jose import JWTError, jwt
 import google.generativeai as genai
 from PIL import Image
@@ -32,6 +32,8 @@ def get_db():
     try: yield db
     finally: db.close()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# DÜZELTME: Bu fonksiyon artık kullanıcının tüm ilişkili verilerini tek seferde yüklüyor.
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
     try:
@@ -39,7 +41,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         email: str = payload.get("sub")
         if email is None: raise credentials_exception
     except JWTError: raise credentials_exception
-    user = db.query(models.User).filter(models.User.email == email).first()
+    
+    # EAGER LOADING: Raporlar, ilaçlar ve kilo geçmişi kullanıcıyla birlikte tek bir sorguda yüklenir.
+    user = db.query(models.User).options(
+        joinedload(models.User.reports),
+        joinedload(models.User.medications_v2),
+        joinedload(models.User.weight_entries_v2)
+    ).filter(models.User.email == email).first()
+
     if user is None: raise credentials_exception
     return user
 
@@ -179,7 +188,6 @@ def get_user_profile_summary(user: models.User, db: Session) -> str:
     if user.chronic_diseases: 
         summary += f"- Kronik Hastalıklar: {user.chronic_diseases}\n"
     
-    # Bu fonksiyon artık models.py ile senkronize
     if user.medications_v2:
         summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user.medications_v2]) + "\n"
     
