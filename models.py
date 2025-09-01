@@ -25,9 +25,9 @@ class User(Base):
     pregnancy_status = Column(String, nullable=True)
     
     reports = relationship("Report", back_populates="owner")
-    # DÜZELTME: İlişki adları basitleştirildi
-    medications = relationship("Medication", back_populates="owner")
-    weight_entries = relationship("WeightEntry", back_populates="owner")
+    # DÜZELTME: Sunucu hatasını gidermek için ilişki adları eski haline getirildi
+    medications_v2 = relationship("Medication", back_populates="owner")
+    weight_entries_v2 = relationship("WeightEntry", back_populates="owner")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -52,8 +52,8 @@ class Medication(Base):
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    # DÜZELTME: back_populates User modelindeki basitleştirilmiş adla eşleşiyor
-    owner = relationship("User", back_populates="medications")
+    # DÜZELTME: back_populates User modelindeki eski adla eşleşiyor
+    owner = relationship("User", back_populates="medications_v2")
 
 class WeightEntry(Base):
     # Tablo adını v2 olarak tutuyoruz ki yeni ve temiz bir tablo oluşsun
@@ -64,6 +64,6 @@ class WeightEntry(Base):
     date = Column(Date, nullable=False, default=date.today)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    # DÜZELTME: back_populates User modelindeki basitleştirilmiş adla eşleşiyor
-    owner = relationship("User", back_populates="weight_entries")
+    # DÜZELTME: back_populates User modelindeki eski adla eşleşiyor
+    owner = relationship("User", back_populates="weight_entries_v2")
 
