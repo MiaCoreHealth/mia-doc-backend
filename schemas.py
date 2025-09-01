@@ -1,7 +1,7 @@
-# backend/schemas.py (İlişki Adları Senkronize Edildi)
+# backend/schemas.py (Veri Tipi Senkronize Edildi)
 
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime # datetime eklendi
 from typing import Optional
 
 # --- İlaç Şemaları ---
@@ -47,7 +47,8 @@ class Report(BaseModel):
     id: int
     original_filename: str
     analysis_result: str
-    upload_date: date
+    # DÜZELTME: Veri tipi 'date' yerine 'datetime' olarak değiştirildi
+    upload_date: datetime
     class Config:
         from_attributes = True
 
@@ -83,7 +84,6 @@ class User(UserBase):
     pregnancy_status: Optional[str] = None
     reports: list[Report] = []
     
-    # DÜZELTME: Bu alan adları artık models.py ile tam olarak aynı
     medications_v2: list[Medication] = []
     weight_entries_v2: list[WeightEntry] = []
 
