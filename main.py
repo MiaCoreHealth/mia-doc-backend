@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Düzeltmeler ve İyileştirmeler Dahil - Tam Hali)
+# backend/main.py (Tüm Düzeltmeler ve v4 Senkronizasyonu Dahil - Tam Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -41,6 +41,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if email is None: raise credentials_exception
     except JWTError: raise credentials_exception
     
+    # DÜZELTME: İlişki adları models.py ve schemas.py'deki v4 yapısıyla tam senkronize edildi.
     user = db.query(models.User).options(
         joinedload(models.User.reports),
         joinedload(models.User.medications_v4),
@@ -176,6 +177,7 @@ def get_user_profile_summary(user: models.User) -> str:
     if user.chronic_diseases: 
         summary += f"- Kronik Hastalıklar: {user.chronic_diseases}\n"
     
+    # DÜZELTME: Bu fonksiyon artık models.py ve schemas.py'deki v4 ile senkronize
     if user.medications_v4:
         summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user.medications_v4]) + "\n"
     
@@ -282,11 +284,10 @@ async def analyze_symptoms(
 ):
     profile_summary = get_user_profile_summary(current_user)
     
-    # DÜZELTME: Semptom analizi için de katı kurallar eklendi.
     system_instruction_text = f"""
     Senin adın Mia. Sen, kullanıcının anlattığı belirtilere ve sağlık geçmişine göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.
     
-    EN ÖNEMLİ KURALLAR:
+    KURALLAR:
     1. GÖREV SINIRI: Senin tek görevin sağlıkla ilgili konulardır. Finans, siyaset, spor gibi konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında, sana en iyi sağlık konularında yardımcı olabilirim." de.
     2. BÜTÜNSEL YAKLAŞIM: Yönlendirme yaparken aşağıda verilen sağlık geçmişini MUTLAKA dikkate al. 'Sağlık geçmişin göz önünde bulundurulduğunda...' gibi ifadelerle yorumunu kişiselleştir.
     3. NETLİK: Gerekirse birkaç netleştirici soru sor, ardından "Bu belirtiler ve sağlık geçmişin göz önünde bulundurulduğunda, bir [Tıbbi Branş] uzmanına danışman faydalı olabilir." şeklinde net bir yönlendirme yap.
@@ -309,7 +310,6 @@ async def analyze_symptoms(
         raise HTTPException(status_code=400, detail="Analiz için bir mesaj gönderilmedi.")
 
     try:
-        # Sohbet geçmişinin tamamını gönderiyoruz
         chat = model.start_chat(history=gemini_history[:-1])
         response = chat.send_message(gemini_history[-1]['parts'])
         analysis_text = response.text

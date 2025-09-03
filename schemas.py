@@ -1,4 +1,4 @@
-# backend/schemas.py (İlişki Adları Senkronize Edildi v3)
+# backend/schemas.py (İlişki Adları Senkronize Edildi v4)
 
 from pydantic import BaseModel
 from datetime import date, datetime
@@ -84,8 +84,8 @@ class User(UserBase):
     reports: list[Report] = []
     
     # DÜZELTME: Bu alan adları artık models.py ile tam olarak aynı
-    medications_v3: list[Medication] = []
-    weight_entries_v3: list[WeightEntry] = []
+    medications_v4: list[Medication] = []
+    weight_entries_v4: list[WeightEntry] = []
 
     class Config:
         from_attributes = True

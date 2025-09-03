@@ -1,4 +1,4 @@
-# backend/models.py (Veritabanı Tablo Düzeltmesi v3)
+# backend/models.py (Veritabanı Tablo Düzeltmesi v4)
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Date, Float, DateTime
 from sqlalchemy.orm import relationship
@@ -26,8 +26,8 @@ class User(Base):
     
     reports = relationship("Report", back_populates="owner")
     # DÜZELTME: Sunucu hatasını gidermek için ilişki adları güncellendi
-    medications_v3 = relationship("Medication", back_populates="owner")
-    weight_entries_v3 = relationship("WeightEntry", back_populates="owner")
+    medications_v4 = relationship("Medication", back_populates="owner")
+    weight_entries_v4 = relationship("WeightEntry", back_populates="owner")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -41,8 +41,8 @@ class Report(Base):
     owner = relationship("User", back_populates="reports")
 
 class Medication(Base):
-    # DÜZELTME: Tablo adı v3 olarak güncellendi
-    __tablename__ = "medications_v3"
+    # DÜZELTME: Tablo adı v4 olarak güncellendi
+    __tablename__ = "medications_v4"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
@@ -52,16 +52,16 @@ class Medication(Base):
     notes = Column(String, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    owner = relationship("User", back_populates="medications_v3")
+    owner = relationship("User", back_populates="medications_v4")
 
 class WeightEntry(Base):
-    # DÜZELTME: Tablo adı v3 olarak güncellendi
-    __tablename__ = "weight_entries_v3" 
+    # DÜZELTME: Tablo adı v4 olarak güncellendi
+    __tablename__ = "weight_entries_v4" 
 
     id = Column(Integer, primary_key=True, index=True)
     weight_kg = Column(Float, nullable=False)
     date = Column(Date, nullable=False, default=date.today)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
-    owner = relationship("User", back_populates="weight_entries_v3")
+    owner = relationship("User", back_populates="weight_entries_v4")
 
