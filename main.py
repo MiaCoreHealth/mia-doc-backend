@@ -1,4 +1,4 @@
-# backend/main.py (İlişki Adları Senkronize Edildi v3)
+# backend/main.py (Tüm Düzeltmeler ve İyileştirmeler Dahil - Tam Hali)
 
 import os
 from datetime import date, datetime, timezone
@@ -41,11 +41,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if email is None: raise credentials_exception
     except JWTError: raise credentials_exception
     
-    # DÜZELTME: İlişki adları models.py ve schemas.py ile senkronize edildi
     user = db.query(models.User).options(
         joinedload(models.User.reports),
-        joinedload(models.User.medications_v3),
-        joinedload(models.User.weight_entries_v3)
+        joinedload(models.User.medications_v4),
+        joinedload(models.User.weight_entries_v4)
     ).filter(models.User.email == email).first()
 
     if user is None: raise credentials_exception
@@ -114,22 +113,12 @@ def read_user_medications(db: Session = Depends(get_db), current_user: models.Us
     return db.query(models.Medication).filter(models.Medication.owner_id == current_user.id).all()
 
 @app.put("/medications/{med_id}", response_model=schemas.Medication)
-def update_medication(
-    med_id: int, 
-    med_update: schemas.MedicationUpdate,
-    db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user)
-):
+def update_medication( med_id: int, med_update: schemas.MedicationUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     db_med = db.query(models.Medication).filter(models.Medication.id == med_id).first()
-    if not db_med:
-        raise HTTPException(status_code=404, detail="İlaç bulunamadı")
-    if db_med.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Bu ilacı düzenleme yetkiniz yok")
-    
+    if not db_med: raise HTTPException(status_code=404, detail="İlaç bulunamadı")
+    if db_med.owner_id != current_user.id: raise HTTPException(status_code=403, detail="Bu ilacı düzenleme yetkiniz yok")
     update_data = med_update.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(db_med, key, value)
-        
+    for key, value in update_data.items(): setattr(db_med, key, value)
     db.add(db_med)
     db.commit()
     db.refresh(db_med)
@@ -162,7 +151,7 @@ def read_user_weight_entries(db: Session = Depends(get_db), current_user: models
         return entries
     except Exception as e:
         print(f"--- KİLO GEÇMİŞİ HATASI ---: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Kilo geçmişi verileri işlenirken bir sunucu hatası oluştu.")
+        raise HTTPException(status_code=500, detail="Kilo geçmişi verileri işlenirken bir sunucu hatası oluştu.")
 
 @app.delete("/weight-entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_weight_entry(entry_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -176,7 +165,7 @@ def delete_weight_entry(entry_id: int, db: Session = Depends(get_db), current_us
 
 # --- YAPAY ZEKA FONKSİYONLARI ---
 
-def get_user_profile_summary(user: models.User, db: Session) -> str:
+def get_user_profile_summary(user: models.User) -> str:
     summary = "Hastanın bilinen sağlık geçmişi:\n"
     if user.date_of_birth:
         today = date.today()
@@ -187,9 +176,8 @@ def get_user_profile_summary(user: models.User, db: Session) -> str:
     if user.chronic_diseases: 
         summary += f"- Kronik Hastalıklar: {user.chronic_diseases}\n"
     
-    # DÜZELTME: Bu fonksiyon artık models.py ve schemas.py ile senkronize
-    if user.medications_v3:
-        summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user.medications_v3]) + "\n"
+    if user.medications_v4:
+        summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user.medications_v4]) + "\n"
     
     return summary
 
@@ -230,10 +218,7 @@ async def analyze_report(
     if file:
         task_prompt = "Aşağıdaki tıbbi raporu, sana verdiğim genel kurallar ve hastanın profili çerçevesinde yorumla. Cevapların kısa, net ve aksiyon odaklı olsun.\n\n"
         
-        if not for_someone_else:
-            greeting = "Merhaba! Raporunu inceliyorum."
-        else:
-            greeting = "Merhaba! Gönderdiğin raporu inceliyorum."
+        greeting = "Merhaba! Raporunu inceliyorum." if not for_someone_else else "Merhaba! Gönderdiğin raporu inceliyorum."
 
         task_prompt += f"""
         YORUMLAMA SÜRECİ (Bu adımları kullanıcıya gösterme, sadece uygula):
@@ -244,7 +229,7 @@ async def analyze_report(
         """
         
         if not for_someone_else:
-            profile_summary = get_user_profile_summary(current_user, db)
+            profile_summary = get_user_profile_summary(current_user)
             task_prompt += "\n" + profile_summary
         
         task_prompt += "\nİşte yorumlaman gereken rapor:"
@@ -273,11 +258,10 @@ async def analyze_report(
 
 
 @app.get("/health-tip/")
-async def get_health_tip(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_health_tip(current_user: models.User = Depends(get_current_user)):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        profile_summary = get_user_profile_summary(current_user, db)
-        
+        profile_summary = get_user_profile_summary(current_user)
         prompt = f"""
         Senin adın Mia. Pozitif ve motive edici bir sağlık koçusun. 
         Aşağıdaki profiline göre kullanıcıya özel, kısa (tek cümle), uygulanabilir ve arkadaşça bir "günün sağlık tavsiyesi" oluştur. 
@@ -294,18 +278,19 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user), 
 @app.post("/symptom-analyze/")
 async def analyze_symptoms(
     history_json: str = Form("[]"),
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_user)
 ):
-    profile_summary = get_user_profile_summary(current_user, db)
+    profile_summary = get_user_profile_summary(current_user)
     
+    # DÜZELTME: Semptom analizi için de katı kurallar eklendi.
     system_instruction_text = f"""
     Senin adın Mia. Sen, kullanıcının anlattığı belirtilere ve sağlık geçmişine göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.
     
-    KURALLAR:
-    1. BÜTÜNSEL YAKLAŞIM: Yönlendirme yaparken aşağıda verilen sağlık geçmişini MUTLAKA dikkate al. 'Sağlık geçmişin göz önünde bulundurulduğunda...' gibi ifadelerle yorumunu kişiselleştir.
-    2. NETLİK: Gerekirse birkaç netleştirici soru sor, ardından "Bu belirtiler ve sağlık geçmişin göz önünde bulundurulduğunda, bir [Tıbbi Branş] uzmanına danışman faydalı olabilir." şeklinde net bir yönlendirme yap.
-    3. SINIRLAR: Asla teşhis koyma veya ilaç önerme. Her cevabının sonunda mutlaka "Bu bir tıbbi tavsiye değildir, en doğru bilgi için lütfen doktoruna danış." uyarısını ekle.
+    EN ÖNEMLİ KURALLAR:
+    1. GÖREV SINIRI: Senin tek görevin sağlıkla ilgili konulardır. Finans, siyaset, spor gibi konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında, sana en iyi sağlık konularında yardımcı olabilirim." de.
+    2. BÜTÜNSEL YAKLAŞIM: Yönlendirme yaparken aşağıda verilen sağlık geçmişini MUTLAKA dikkate al. 'Sağlık geçmişin göz önünde bulundurulduğunda...' gibi ifadelerle yorumunu kişiselleştir.
+    3. NETLİK: Gerekirse birkaç netleştirici soru sor, ardından "Bu belirtiler ve sağlık geçmişin göz önünde bulundurulduğunda, bir [Tıbbi Branş] uzmanına danışman faydalı olabilir." şeklinde net bir yönlendirme yap.
+    4. SINIRLAR: Asla teşhis koyma veya ilaç önerme. Her cevabının sonunda mutlaka "Bu bir tıbbi tavsiye değildir, en doğru bilgi için lütfen doktoruna danış." uyarısını ekle.
     
     {profile_summary}
     """
@@ -324,6 +309,7 @@ async def analyze_symptoms(
         raise HTTPException(status_code=400, detail="Analiz için bir mesaj gönderilmedi.")
 
     try:
+        # Sohbet geçmişinin tamamını gönderiyoruz
         chat = model.start_chat(history=gemini_history[:-1])
         response = chat.send_message(gemini_history[-1]['parts'])
         analysis_text = response.text
