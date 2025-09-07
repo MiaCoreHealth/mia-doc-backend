@@ -1,4 +1,4 @@
-# backend/main.py (Tüm Düzeltmeler ve v4 Senkronizasyonu Dahil - Tam Hali)
+# backend/main.py (Daha Akıllı ve Odaklı Asistanlar)
 
 import os
 from datetime import date, datetime, timezone
@@ -41,7 +41,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if email is None: raise credentials_exception
     except JWTError: raise credentials_exception
     
-    # DÜZELTME: İlişki adları models.py ve schemas.py'deki v4 yapısıyla tam senkronize edildi.
     user = db.query(models.User).options(
         joinedload(models.User.reports),
         joinedload(models.User.medications_v4),
@@ -177,7 +176,6 @@ def get_user_profile_summary(user: models.User) -> str:
     if user.chronic_diseases: 
         summary += f"- Kronik Hastalıklar: {user.chronic_diseases}\n"
     
-    # DÜZELTME: Bu fonksiyon artık models.py ve schemas.py'deki v4 ile senkronize
     if user.medications_v4:
         summary += "- Kullandığı İlaçlar: " + ", ".join([f"{m.name} {m.dosage}" for m in user.medications_v4]) + "\n"
     
@@ -193,13 +191,14 @@ async def analyze_report(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # DÜZELTME: Bu asistanın görev tanımı daha spesifik hale getirildi
     system_instruction_text = """
-    Senin adın Mia. Sen, Miacore Health platformunun sıcakkanlı, arkadaş canlısı ve destekleyici sağlık asistanısın.
-    Görevin, sana verilen tıbbi raporları ve soruları, hastanın profil bilgilerini dikkate alarak yorumlamaktır.
+    Senin adın Mia. Sen, Miacore Health platformunun RAPOR ANALİZİ asistanısın.
+    Görevin, SADECE sana yüklenen tıbbi raporları ve bu raporlar hakkındaki takip sorularını yorumlamaktır.
     
     EN ÖNEMLİ KURALLAR:
-    1. GÖREV SINIRI: Sadece sağlıkla ilgili konulara cevap ver. Konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında kalıyor, sana en iyi sağlık konularında yardımcı olabilirim." de.
-    2. DİL VE ÜSLUP: Cevapların her zaman basit, sade ve anlaşılır olsun. Tıbbi jargondan kaçın. Bulguları bir doktorun hastasına anlatır gibi özetle.
+    1. GÖREV SINIRI: Eğer sana bir rapor yüklenmeden genel bir sağlık sorusu (örn: "başım ağrıyor", "göğsümde ağrı var") sorulursa, bu soruyu KESİNLİKLE CEVAPLAMA. Bunun yerine, kullanıcıyı doğru yere yönlendirerek kibarca şu cevabı ver: "Anladım, yaşadığın belirtiyi analiz etmemi istersen, lütfen ana menüdeki 'Hangi Doktora Gitmeliyim?' bölümünü kullan. Bu bölümde sadece yüklediğin raporları yorumlayabiliyorum."
+    2. DİL VE ÜSLUP: Cevapların her zaman basit, sade ve anlaşılır olsun. Tıbbi jargondan kaçın.
     3. YASAL UYARI: Her cevabının sonunda MUTLAKA "Unutma, bu yorumlar tıbbi tavsiye yerine geçmez. Lütfen doktoruna danış." uyarısını ekle.
     4. KESİNLİKLE YAPMA: Asla net bir teşhis koyma. Asla ilaç veya tedavi önerme.
     """
@@ -219,31 +218,25 @@ async def analyze_report(
     
     if file:
         task_prompt = "Aşağıdaki tıbbi raporu, sana verdiğim genel kurallar ve hastanın profili çerçevesinde yorumla. Cevapların kısa, net ve aksiyon odaklı olsun.\n\n"
-        
         greeting = "Merhaba! Raporunu inceliyorum." if not for_someone_else else "Merhaba! Gönderdiğin raporu inceliyorum."
-
         task_prompt += f"""
         YORUMLAMA SÜRECİ (Bu adımları kullanıcıya gösterme, sadece uygula):
         1. GÜVENLİK KONTROLÜ: Raporun içeriği (örn: uterus, prostat) hastanın cinsiyetiyle biyolojik olarak uyumlu mu? Uyumsuzsa, yorum yapma ve SADECE şu cevabı ver: 'Yüklediğin rapor ile profil bilgilerin arasında bir tutarsızlık var gibi görünüyor. Lütfen doğru raporu yüklediğinden emin ol.'
         2. RAPOR TÜRÜNÜ BELİRLE VE GİRİŞ YAP: Raporun türünü anla (örn: kan tahlili, ultrason) ve cevabına şu şekilde başla: "{greeting} Gördüğüm kadarıyla bu bir [Rapor Türü] sonucu."
-        3. AKILLI ANALİZ: Rapordaki anormal bulguları hastanın bilinen kronik hastalıklarıyla ilişkilendir. EĞER İLİŞKİ VARSA (örn: kronik böbrek hastasında kreatinin yüksekliği), bu durumu net bir şekilde belirt. EĞER İLİŞKİ YOKSA, bulguları uzun açıklamalar yapmadan özetle.
+        3. AKILLI ANALİZ: Rapordaki anormal bulguları hastanın bilinen kronik hastalıklarıyla ilişkilendir.
         4. ÖZETLE VE YÖNLENDİR: Yorumunun sonunda her zaman hangi branşa gidilmesi gerektiğini kısaca belirt.
         """
-        
         if not for_someone_else:
             profile_summary = get_user_profile_summary(current_user)
             task_prompt += "\n" + profile_summary
-        
         task_prompt += "\nİşte yorumlaman gereken rapor:"
-
         new_content.append(task_prompt)
         contents = await file.read()
         img = Image.open(io.BytesIO(contents))
         new_content.append(img)
 
     if question:
-        armored_question = f"""Kullanıcının takip sorusunu, sağlık asistanı rolünü ve görev sınırlarını koruyarak cevapla. İşte kullanıcının sorusu: "{question}" """
-        new_content.append(armored_question)
+        new_content.append(question)
     
     if not new_content:
         raise HTTPException(status_code=400, detail="Analiz için rapor veya soru gönderilmedi.")
@@ -268,7 +261,6 @@ async def get_health_tip(current_user: models.User = Depends(get_current_user)):
         Senin adın Mia. Pozitif ve motive edici bir sağlık koçusun. 
         Aşağıdaki profiline göre kullanıcıya özel, kısa (tek cümle), uygulanabilir ve arkadaşça bir "günün sağlık tavsiyesi" oluştur. 
         Cevabın SADECE tavsiye metnini içersin.
-        
         {profile_summary}
         """
         response = model.generate_content(prompt)
@@ -284,12 +276,13 @@ async def analyze_symptoms(
 ):
     profile_summary = get_user_profile_summary(current_user)
     
+    # DÜZELTME: Bu asistanın görev tanımı da daha katı hale getirildi
     system_instruction_text = f"""
-    Senin adın Mia. Sen, kullanıcının anlattığı belirtilere ve sağlık geçmişine göre onu en doğru tıbbi branşa yönlendiren uzman bir sağlık asistanısın.
+    Senin adın Mia. Sen, kullanıcının anlattığı belirtilere ve sağlık geçmişine göre onu en doğru tıbbi branşa yönlendiren SEMPTOM ANALİZİ asistanısın.
     
-    KURALLAR:
-    1. GÖREV SINIRI: Senin tek görevin sağlıkla ilgili konulardır. Finans, siyaset, spor gibi konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında, sana en iyi sağlık konularında yardımcı olabilirim." de.
-    2. BÜTÜNSEL YAKLAŞIM: Yönlendirme yaparken aşağıda verilen sağlık geçmişini MUTLAKA dikkate al. 'Sağlık geçmişin göz önünde bulundurulduğunda...' gibi ifadelerle yorumunu kişiselleştir.
+    EN ÖNEMLİ KURALLAR:
+    1. GÖREV SINIRI: Senin tek görevin sağlıkla ilgili belirtileri analiz etmektir. Finans, siyaset, spor gibi konu dışı sorulara KESİNLİKLE cevap verme. Kibarca, "Bu konu benim uzmanlık alanımın dışında, sana en iyi sağlık konularında yardımcı olabilirim." de.
+    2. BÜTÜNSEL YAKLAŞIM: Yönlendirme yaparken aşağıda verilen sağlık geçmişini MUTLAKA dikkate al.
     3. NETLİK: Gerekirse birkaç netleştirici soru sor, ardından "Bu belirtiler ve sağlık geçmişin göz önünde bulundurulduğunda, bir [Tıbbi Branş] uzmanına danışman faydalı olabilir." şeklinde net bir yönlendirme yap.
     4. SINIRLAR: Asla teşhis koyma veya ilaç önerme. Her cevabının sonunda mutlaka "Bu bir tıbbi tavsiye değildir, en doğru bilgi için lütfen doktoruna danış." uyarısını ekle.
     
@@ -325,7 +318,6 @@ def get_medication_info_from_ai(med_name: str):
         - **Ne İçin Kullanılır?:** İlacın ana kullanım amacı.
         - **Yaygın Yan Etkiler:** En sık görülen 2-3 yan etki.
         - **Önemli Not:** Hastanın bilmesi gereken kritik bir uyarı (varsa).
-        
         Cevabın sadece bu bilgileri içeren, formatlanmış bir metin olsun. Tıbbi jargon kullanma.
         """
         response = model.generate_content(prompt, request_options={"timeout": 60})
@@ -335,7 +327,6 @@ def get_medication_info_from_ai(med_name: str):
             if text_part:
                 return text_part
         return "Bu ilaç hakkında güvenilir bir bilgi bulunamadı. Lütfen doktorunuza veya eczacınıza danışın."
-        
     except Exception as e:
         print(f"--- İLAÇ BİLGİSİ HATASI: {str(e)} ---")
         raise HTTPException(status_code=500, detail="Yapay zeka servisinden ilaç bilgisi alınırken bir sorun oluştu.")
